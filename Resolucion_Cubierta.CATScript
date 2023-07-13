@@ -1,0 +1,3038 @@
+Language="VBSCRIPT"
+
+Sub CATMain()
+	'----------------INICIO CODIGO--------------
+	Dim partDocumentCubierta As Document
+	Set partDocumentCubierta = CATIA.ActiveDocument
+
+	Dim partCubierta As Part
+	Set partCubierta = partDocumentCubierta.Part
+
+	Dim shapeFactoryCubierta As Factory
+	Set shapeFactoryCubierta = partCubierta.ShapeFactory
+
+	Dim bodiesCubierta As Bodies
+	Set bodiesCubierta = partCubierta.Bodies
+
+	Dim bodyCubierta As Body
+	Set bodyCubierta = bodiesCubierta.Item("PartBody")
+
+	'------------------CREACION DEL PAD--------------
+	'Pedir al usuario que seleccione el sketch para la cubierta
+	MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar la cubierta")
+
+	Dim anyObjFilterSketchCubierta(0)
+	Dim oMySelectionSketchCubierta As Object
+	Dim selMySelectionSketchCubierta As Selection
+	Dim StatusSketchCubierta As String
+	Dim oSelectedElementSketchCubierta As SelectedElement
+	Dim oElementSketchCubierta As Object
+	Dim strSelectionNameSketchCubierta As String
+	Dim strSelectedElementNameSketchCubierta As String
+	Dim strSelectionTypeNameSketchCubierta As String
+	Dim strSelectedElementTypeNameSketchCubierta As String
+	Dim strSelectionTypeSketchCubierta As String
+	Dim iPopupSketchCubierta As Integer
+
+	Set oMySelectionSketchCubierta = partDocumentCubierta.Selection
+	Set selMySelectionSketchCubierta = oMySelectionSketchCubierta
+	anyObjFilterSketchCubierta(0) = "AnyObject"
+
+	oMySelectionSketchCubierta.Clear
+
+	StatusSketchCubierta = oMySelectionSketchCubierta.SelectElement3(anyObjFilterSketchCubierta, "Select an Element", True, _
+	CATMultiSelTriggWhenSelPerf, False)
+
+	Set oSelectedElementSketchCubierta = oMySelectionSketchCubierta.Item(1)
+	Set oElementSketchCubierta = oMySelectionSketchCubierta.Item(1).Value
+
+	strSelectionNameSketchCubierta = oMySelectionSketchCubierta.Item(1).Name
+	strSelectionTypeSketchCubierta = oMySelectionSketchCubierta.Item(1).Type
+	strSelectionTypeNameSketchCubierta = TypeName(oMySelectionSketchCubierta.Item(1))
+	strSelectedElementNameSketchCubierta = oElementSketchCubierta.Name
+	strSelectedElementTypeNameSketchCubierta = TypeName(oElementSketchCubierta)
+
+	' Con las lineas de abajo sin comentar aparece un mensaje por pantalla con la informacion importante
+	' iPopupSketchCubierta = MsgBox( _
+	' "Selection.Name = " + strSelectionNameSketchCubierta + vbCrLf + _
+	' "Selection.Type = " + strSelectionTypeSketchCubierta + vbCrLf + _
+	' "Selection TypeName = " + strSelectionTypeNameSketchCubierta + vbCrLf + _
+	' "SelectedElement.Name = " + strSelectedElementNameSketchCubierta + vbCrLf + _
+	' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchCubierta, _
+	' vbOKCancel, "VB Type Tester")
+
+	If strSelectedElementTypeNameSketchCubierta <> "Sketch" Then
+		MsgBox("No ha seleccionado un boceto")
+		Exit Sub
+	End If
+
+	Dim angulo As Double
+	Dim anguloRad As Double
+	Dim alpha As Double
+
+	'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+	Dim tipoAngulo As Integer
+	tipoAngulo = 1
+	tipoAngulo = InputBox("¿Cómo va a intrducir la pendiente? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente", tipoAngulo)
+
+	If tipoAngulo = 1 Then
+		'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+		angulo = 45
+		angulo = InputBox("Por favor introduzca el ángulo de la cubierta en grados, con respecto a la horizontal.","Pendiente de la cubierta", angulo)
+	ElseIf tipoAngulo = 2 Then
+		Dim porcentaje As Double
+		porcentaje = 100
+		porcentaje = InputBox("Por favor introduzca la pendiente de la cubierta en porcentaje, sin incluir el simbolo %.","Pendiente de la cubierta", porcentaje)
+		anguloRad = Atn(porcentaje/100)
+		angulo = anguloRad*(180/3.141592)
+	ElseIf tipoAngulo = 3 Then
+		Dim fraccion As String
+		fraccion = "2/3"
+		fraccion = InputBox("Por favor introduzca la fracción de la pendiente de la cubierta, ene l formato X/Y ","Pendiente de la cubierta", fraccion)
+		Dim frac1 As Integer
+		Dim frac2 As Integer
+		Dim fraccionDouble As Double
+		For a = 1 To Len(fraccion)
+			If Mid(fraccion,a,1) = "/" Then
+				frac1 = CInt(Left(fraccion, a-1))
+				frac2 = Cint(Right(fraccion, Len(fraccion)-a))
+				fraccionDouble = frac1 / frac2
+			End If
+		Next
+		anguloRad = Atn(fraccionDouble)
+		angulo = anguloRad*(180/3.141592)
+	Else
+		MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+		Exit Sub
+	End If
+	alpha = 90 - angulo
+
+	'Preguntar al usuario si va a quere un patio interior
+	Dim resultPatioInterior As Integer
+	resultPatioInterior = 0
+	resultPatioInterior = InputBox("¿Cuántos patios interiores quiere? " & vbCrLf & "Si no quiere ninguno, introduzca 0." & vbCrLf & "Como máximo puede tener 3 patios interiores" ,"Patio Interior", resultPatioInterior)
+
+	'Pedir al usuario que seleccione el sketch para el patio interior
+	If resultPatioInterior = 1 Then
+		MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar el patio interior numero 1")
+
+		Dim anyObjFilterSketchPatio1(0)
+		Dim oMySelectionSketchPatio1 As Object
+		Dim selMySelectionSketchPatio1 As Selection
+		Dim StatusSketchPatio1 As String
+		Dim oSelectedElementSketchPatio1 As SelectedElement
+		Dim oElementSketchPatio1 As Object
+		Dim strSelectionNameSketchPatio1 As String
+		Dim strSelectedElementNameSketchPatio1 As String
+		Dim strSelectionTypeNameSketchPatio1 As String
+		Dim strSelectedElementTypeNameSketchPatio1 As String
+		Dim strSelectionTypeSketchPatio1 As String
+		Dim iPopupSketchPatio1 As Integer
+
+		Set oMySelectionSketchPatio1 = partDocumentCubierta.Selection
+		Set selMySelectionSketchPatio1 = oMySelectionSketchPatio1
+		anyObjFilterSketchPatio1(0) = "AnyObject"
+
+		oMySelectionSketchPatio1.Clear
+
+		StatusSketchPatio1 = oMySelectionSketchPatio1.SelectElement3(anyObjFilterSketchPatio1, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementSketchPatio1 = oMySelectionSketchPatio1.Item(1)
+		Set oElementSketchPatio1 = oMySelectionSketchPatio1.Item(1).Value
+
+		strSelectionNameSketchPatio1 = oMySelectionSketchPatio1.Item(1).Name
+		strSelectionTypeSketchPatio1 = oMySelectionSketchPatio1.Item(1).Type
+		strSelectionTypeNameSketchPatio1 = TypeName(oMySelectionSketchPatio1.Item(1))
+		strSelectedElementNameSketchPatio1 = oElementSketchPatio1.Name
+		strSelectedElementTypeNameSketchPatio1 = TypeName(oElementSketchPatio1)
+
+		' iPopupSketchPatio = MsgBox( _
+		' "Selection.Name = " + strSelectionNameSketchPatio + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeSketchPatio + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameSketchPatio + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameSketchPatio + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchPatio, _
+		' vbOKCancel, "VB Type Tester")
+
+		If strSelectedElementTypeNameSketchPatio1 <> "Sketch" Then
+			MsgBox("No ha seleccionado un boceto")
+			Exit Sub
+		End If
+	
+		Dim difCotaPatio1 As Double
+		difCotaPatio1 = 0
+		difCotaPatio1 = InputBox("¿Que diferencia de cota tiene el patio nº 1 con el resto de la cubierta?","Diferencia de cota en el patio nº 1", difCotaPatio1)
+
+		'Pedir la inclinacion de los faldones del patio 1
+		Dim anguloPatio1 As Double
+		Dim anguloRadPatio1 As Double
+		Dim alphaPatio1 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloPatio1 As Integer
+		tipoAnguloPatio1 = 1
+		tipoAnguloPatio1 = InputBox("¿Cómo va a intrducir la pendiente del patio interior numero 1? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente Patio Interior 1", tipoAnguloPatio1)
+
+		If tipoAnguloPatio1 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloPatio1 = 45
+			anguloPatio1 = InputBox("Por favor introduzca el ángulo del patio nº 1 en grados, con respecto a la horizontal.","Pendiente del patio nº 1", anguloPatio1)
+		ElseIf tipoAnguloPatio1 = 2 Then
+			Dim porcentajePatio1 As Double
+			porcentajePatio1 = 100
+			porcentajePatio1 = InputBox("Por favor introduzca la pendiente del patio nº 1 en porcentaje, sin incluir el simbolo %.","Pendiente del patio nº 1", porcentajePatio1)
+			anguloRadPatio1 = Atn(porcentajePatio1/100)
+			anguloPatio1 = anguloRadPatio1*(180/3.141592)
+		ElseIf tipoAnguloPatio1 = 3 Then
+			Dim fraccionPatio1 As String
+			fraccionPatio1 = "2/3"
+			fraccionPatio1 = InputBox("Por favor introduzca la fracción de la pendiente del patio nº 1, en el formato X/Y ","Pendiente del patio nº 1", fraccionPatio1)
+			Dim frac1Patio1 As Integer
+			Dim frac2Patio1 As Integer
+			Dim fraccionDoublePatio1 As Double
+			For a = 1 To Len(fraccionPatio1)
+				If Mid(fraccionPatio1,a,1) = "/" Then
+					frac1Patio1 = CInt(Left(fraccionPatio1, a-1))
+					frac2Patio1 = Cint(Right(fraccionPatio1, Len(fraccionPatio1)-a))
+					fraccionDoublePatio1 = frac1Patio1 / frac2Patio1
+				End If
+			Next
+			anguloRadPatio1 = Atn(fraccionDoublePatio1)
+			anguloPatio1 = anguloRadPatio1*(180/3.141592)
+		Else
+			MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+			Exit Sub
+		End If
+		alphaPatio1 = 90 - anguloPatio1
+
+	ElseIf resultPatioInterior = 2 Then
+
+		'---------------------------------------------------------------
+		'-------------PATIO 1-------------------------------------------
+		'---------------------------------------------------------------
+
+		MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar el patio interior número 1")
+
+		Dim anyObjFilterSketchPatio12(0)
+		Dim oMySelectionSketchPatio12 As Object
+		Dim selMySelectionSketchPatio12 As Selection
+		Dim StatusSketchPatio12 As String
+		Dim oSelectedElementSketchPatio12 As SelectedElement
+		Dim oElementSketchPatio12 As Object
+		Dim strSelectionNameSketchPatio12 As String
+		Dim strSelectedElementNameSketchPatio12 As String
+		Dim strSelectionTypeNameSketchPatio12 As String
+		Dim strSelectedElementTypeNameSketchPatio12 As String
+		Dim strSelectionTypeSketchPatio12 As String
+		Dim iPopupSketchPatio12 As Integer
+
+		Set oMySelectionSketchPatio12 = partDocumentCubierta.Selection
+		Set selMySelectionSketchPatio12 = oMySelectionSketchPatio12
+		anyObjFilterSketchPatio12(0) = "AnyObject"
+
+		oMySelectionSketchPatio12.Clear
+
+		StatusSketchPatio12 = oMySelectionSketchPatio12.SelectElement3(anyObjFilterSketchPatio12, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementSketchPatio12 = oMySelectionSketchPatio12.Item(1)
+		Set oElementSketchPatio12 = oMySelectionSketchPatio12.Item(1).Value
+
+		strSelectionNameSketchPatio12 = oMySelectionSketchPatio12.Item(1).Name
+		strSelectionTypeSketchPatio12 = oMySelectionSketchPatio12.Item(1).Type
+		strSelectionTypeNameSketchPatio12 = TypeName(oMySelectionSketchPatio12.Item(1))
+		strSelectedElementNameSketchPatio12 = oElementSketchPatio12.Name
+		strSelectedElementTypeNameSketchPatio12 = TypeName(oElementSketchPatio12)
+
+		' iPopupSketchPatio = MsgBox( _
+		' "Selection.Name = " + strSelectionNameSketchPatio + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeSketchPatio + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameSketchPatio + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameSketchPatio + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchPatio, _
+		' vbOKCancel, "VB Type Tester")
+
+		If strSelectedElementTypeNameSketchPatio12 <> "Sketch" Then
+			MsgBox("No ha seleccionado un boceto")
+			Exit Sub
+		End If
+
+		Dim difCotaPatio12 As Double
+		difCotaPatio12 = 0
+		difCotaPatio12 = InputBox("¿Que diferencia de cota tiene el patio nº 1 con el resto de la cubierta?","Diferencia de cota en el patio nº 1", difCotaPatio12)
+
+
+		'Pedir la inclinacion de los faldones del patio 1
+		Dim anguloPatio12 As Double
+		Dim anguloRadPatio12 As Double
+		Dim alphaPatio12 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloPatio12 As Integer
+		tipoAnguloPatio12 = 1
+		tipoAnguloPatio12 = InputBox("¿Cómo va a intrducir la pendiente del patio interior numero 1? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente Patio Interior 1", tipoAnguloPatio12)
+
+		If tipoAnguloPatio12 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloPatio12 = 45
+			anguloPatio12 = InputBox("Por favor introduzca el ángulo del patio nº 1 en grados, con respecto a la horizontal.","Pendiente del patio nº 1", anguloPatio12)
+		ElseIf tipoAnguloPatio12 = 2 Then
+			Dim porcentajePatio12 As Double
+			porcentajePatio12 = 100
+			porcentajePatio12 = InputBox("Por favor introduzca la pendiente del patio nº 1 en porcentaje, sin incluir el simbolo %.","Pendiente del patio nº 1", porcentajePatio12)
+			anguloRadPatio12 = Atn(porcentajePatio12/100)
+			anguloPatio12 = anguloRadPatio12*(180/3.141592)
+		ElseIf tipoAnguloPatio12 = 3 Then
+			Dim fraccionPatio12 As String
+			fraccionPatio12 = "2/3"
+			fraccionPatio12 = InputBox("Por favor introduzca la fracción de la pendiente del patio nº 1, en el formato X/Y ","Pendiente del patio nº 1", fraccionPatio12)
+			Dim frac1Patio12 As Integer
+			Dim frac2Patio12 As Integer
+			Dim fraccionDoublePatio12 As Double
+			For a = 1 To Len(fraccionPatio12)
+				If Mid(fraccionPatio12,a,1) = "/" Then
+					frac1Patio12 = CInt(Left(fraccionPatio12, a-1))
+					frac2Patio12 = Cint(Right(fraccionPatio12, Len(fraccionPatio12)-a))
+					fraccionDoublePatio12 = frac1Patio12 / frac2Patio12
+				End If
+			Next
+			anguloRadPatio12 = Atn(fraccionDoublePatio12)
+			anguloPatio12 = anguloRadPatio12*(180/3.141592)
+		Else
+			MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+			Exit Sub
+		End If
+		alphaPatio12 = 90 - anguloPatio12
+
+
+
+		'---------------------------------------------------------------
+		'-------------PATIO 2-------------------------------------------
+		'---------------------------------------------------------------
+
+		MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar el patio interior número 2")
+
+		Dim anyObjFilterSketchPatio2(0)
+		Dim oMySelectionSketchPatio2 As Object
+		Dim selMySelectionSketchPatio2 As Selection
+		Dim StatusSketchPatio2 As String
+		Dim oSelectedElementSketchPatio2 As SelectedElement
+		Dim oElementSketchPatio2 As Object
+		Dim strSelectionNameSketchPatio2 As String
+		Dim strSelectedElementNameSketchPatio2 As String
+		Dim strSelectionTypeNameSketchPatio2 As String
+		Dim strSelectedElementTypeNameSketchPatio2 As String
+		Dim strSelectionTypeSketchPatio2 As String
+		Dim iPopupSketchPatio2 As Integer
+
+		Set oMySelectionSketchPatio2 = partDocumentCubierta.Selection
+		Set selMySelectionSketchPatio2 = oMySelectionSketchPatio2
+		anyObjFilterSketchPatio2(0) = "AnyObject"
+
+		oMySelectionSketchPatio2.Clear
+
+		StatusSketchPatio2 = oMySelectionSketchPatio2.SelectElement3(anyObjFilterSketchPatio2, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementSketchPatio2 = oMySelectionSketchPatio2.Item(1)
+		Set oElementSketchPatio2 = oMySelectionSketchPatio2.Item(1).Value
+
+		strSelectionNameSketchPatio2 = oMySelectionSketchPatio2.Item(1).Name
+		strSelectionTypeSketchPatio2 = oMySelectionSketchPatio2.Item(1).Type
+		strSelectionTypeNameSketchPatio2 = TypeName(oMySelectionSketchPatio2.Item(1))
+		strSelectedElementNameSketchPatio2 = oElementSketchPatio2.Name
+		strSelectedElementTypeNameSketchPatio2 = TypeName(oElementSketchPatio2)
+
+		' iPopupSketchPatio = MsgBox( _
+		' "Selection.Name = " + strSelectionNameSketchPatio + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeSketchPatio + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameSketchPatio + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameSketchPatio + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchPatio, _
+		' vbOKCancel, "VB Type Tester")
+
+		If strSelectedElementTypeNameSketchPatio2 <> "Sketch" Then
+			MsgBox("No ha seleccionado un boceto")
+			Exit Sub
+		End If
+
+		Dim difCotaPatio2 As Double
+		difCotaPatio2 = 0
+		difCotaPatio2 = InputBox("¿Que diferencia de cota tiene el patio nº 2 con el resto de la cubierta?","Diferencia de cota en el patio nº 2", difCotaPatio2)
+
+		'Pedir la inclinacion de los faldones del patio 2
+		Dim anguloPatio2 As Double
+		Dim anguloRadPatio2 As Double
+		Dim alphaPatio2 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloPatio2 As Integer
+		tipoAnguloPatio2 = 1
+		tipoAnguloPatio2 = InputBox("¿Cómo va a intrducir la pendiente del patio interior numero 2? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente Patio Interior 2", tipoAnguloPatio2)
+
+		If tipoAnguloPatio2 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloPatio2 = 45
+			anguloPatio2 = InputBox("Por favor introduzca el ángulo del patio nº 2 en grados, con respecto a la horizontal.","Pendiente del patio nº 2", anguloPatio2)
+		ElseIf tipoAnguloPatio2 = 2 Then
+			Dim porcentajePatio2 As Double
+			porcentajePatio2 = 100
+			porcentajePatio2 = InputBox("Por favor introduzca la pendiente del patio nº 2 en porcentaje, sin incluir el simbolo %.","Pendiente del patio nº 2", porcentajePatio2)
+			anguloRadPatio2 = Atn(porcentajePatio2/100)
+			anguloPatio2 = anguloRadPatio2*(180/3.141592)
+		ElseIf tipoAnguloPatio2 = 3 Then
+			Dim fraccionPatio2 As String
+			fraccionPatio2 = "2/3"
+			fraccionPatio2 = InputBox("Por favor introduzca la fracción de la pendiente del patio nº 2, en el formato X/Y ","Pendiente del patio nº 2", fraccionPatio2)
+			Dim frac1Patio2 As Integer
+			Dim frac2Patio2 As Integer
+			Dim fraccionDoublePatio2 As Double
+			For a = 1 To Len(fraccionPatio2)
+				If Mid(fraccionPatio2,a,1) = "/" Then
+					frac1Patio2 = CInt(Left(fraccionPatio2, a-1))
+					frac2Patio2 = Cint(Right(fraccionPatio2, Len(fraccionPatio2)-a))
+					fraccionDoublePatio2 = frac1Patio2 / frac2Patio2
+				End If
+			Next
+			anguloRadPatio2 = Atn(fraccionDoublePatio2)
+			anguloPatio2 = anguloRadPatio2*(180/3.141592)
+		Else
+			MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+			Exit Sub
+		End If
+		alphaPatio2 = 90 - anguloPatio2
+
+	ElseIf resultPatioInterior = 3 Then
+		'---------------------------------------------------------------
+		'-------------PATIO 1-------------------------------------------
+		'---------------------------------------------------------------
+
+		MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar el patio interior número 1")
+
+		Dim anyObjFilterSketchPatio13(0)
+		Dim oMySelectionSketchPatio13 As Object
+		Dim selMySelectionSketchPatio13 As Selection
+		Dim StatusSketchPatio13 As String
+		Dim oSelectedElementSketchPatio13 As SelectedElement
+		Dim oElementSketchPatio13 As Object
+		Dim strSelectionNameSketchPatio13 As String
+		Dim strSelectedElementNameSketchPatio13 As String
+		Dim strSelectionTypeNameSketchPatio13 As String
+		Dim strSelectedElementTypeNameSketchPatio13 As String
+		Dim strSelectionTypeSketchPatio13 As String
+		Dim iPopupSketchPatio13 As Integer
+
+		Set oMySelectionSketchPatio13 = partDocumentCubierta.Selection
+		Set selMySelectionSketchPatio13 = oMySelectionSketchPatio13
+		anyObjFilterSketchPatio13(0) = "AnyObject"
+
+		oMySelectionSketchPatio13.Clear
+
+		StatusSketchPatio13 = oMySelectionSketchPatio13.SelectElement3(anyObjFilterSketchPatio13, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementSketchPatio13 = oMySelectionSketchPatio13.Item(1)
+		Set oElementSketchPatio13 = oMySelectionSketchPatio13.Item(1).Value
+
+		strSelectionNameSketchPatio13 = oMySelectionSketchPatio13.Item(1).Name
+		strSelectionTypeSketchPatio13 = oMySelectionSketchPatio13.Item(1).Type
+		strSelectionTypeNameSketchPatio13 = TypeName(oMySelectionSketchPatio13.Item(1))
+		strSelectedElementNameSketchPatio13 = oElementSketchPatio13.Name
+		strSelectedElementTypeNameSketchPatio13 = TypeName(oElementSketchPatio13)
+
+		' iPopupSketchPatio = MsgBox( _
+		' "Selection.Name = " + strSelectionNameSketchPatio + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeSketchPatio + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameSketchPatio + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameSketchPatio + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchPatio, _
+		' vbOKCancel, "VB Type Tester")
+
+		If strSelectedElementTypeNameSketchPatio13 <> "Sketch" Then
+			MsgBox("No ha seleccionado un boceto")
+			Exit Sub
+		End If
+
+		Dim difCotaPatio13 As Double
+		difCotaPatio13 = 0
+		difCotaPatio13 = InputBox("¿Que diferencia de cota tiene el patio nº 1 con el resto de la cubierta?","Diferencia de cota en el patio 1", difCotaPatio13)
+
+		'Pedir la inclinacion de los faldones del patio 1
+		Dim anguloPatio13 As Double
+		Dim anguloRadPatio13 As Double
+		Dim alphaPatio13 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloPatio13 As Integer
+		tipoAnguloPatio13 = 1
+		tipoAnguloPatio13 = InputBox("¿Cómo va a intrducir la pendiente del patio interior numero 1? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente Patio Interior 1", tipoAnguloPatio13)
+
+		If tipoAnguloPatio13 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloPatio13 = 45
+			anguloPatio13 = InputBox("Por favor introduzca el ángulo del patio nº 1 en grados, con respecto a la horizontal.","Pendiente del patio nº 1", anguloPatio13)
+		ElseIf tipoAnguloPatio13 = 2 Then
+			Dim porcentajePatio13 As Double
+			porcentajePatio13 = 100
+			porcentajePatio13 = InputBox("Por favor introduzca la pendiente del patio nº 1 en porcentaje, sin incluir el simbolo %.","Pendiente del patio nº 1", porcentajePatio13)
+			anguloRadPatio13 = Atn(porcentajePatio13/100)
+			anguloPatio13 = anguloRadPatio13*(180/3.141592)
+		ElseIf tipoAnguloPatio13 = 3 Then
+			Dim fraccionPatio13 As String
+			fraccionPatio13 = "2/3"
+			fraccionPatio13 = InputBox("Por favor introduzca la fracción de la pendiente del patio nº 1, en el formato X/Y ","Pendiente del patio nº 1", fraccionPatio13)
+			Dim frac1Patio13 As Integer
+			Dim frac2Patio13 As Integer
+			Dim fraccionDoublePatio13 As Double
+			For a = 1 To Len(fraccionPatio13)
+				If Mid(fraccionPatio13,a,1) = "/" Then
+					frac1Patio13 = CInt(Left(fraccionPatio13, a-1))
+					frac2Patio13 = Cint(Right(fraccionPatio13, Len(fraccionPatio13)-a))
+					fraccionDoublePatio13 = frac1Patio13 / frac2Patio13
+				End If
+			Next
+			anguloRadPatio13 = Atn(fraccionDoublePatio13)
+			anguloPatio13 = anguloRadPatio13*(180/3.141592)
+		Else
+			MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+			Exit Sub
+		End If
+		alphaPatio13 = 90 - anguloPatio13
+
+
+		'---------------------------------------------------------------
+		'-------------PATIO 2-------------------------------------------
+		'---------------------------------------------------------------
+
+		MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar el patio interior número 2")
+
+		Dim anyObjFilterSketchPatio23(0)
+		Dim oMySelectionSketchPatio23 As Object
+		Dim selMySelectionSketchPatio23 As Selection
+		Dim StatusSketchPatio23 As String
+		Dim oSelectedElementSketchPatio23 As SelectedElement
+		Dim oElementSketchPatio23 As Object
+		Dim strSelectionNameSketchPatio23 As String
+		Dim strSelectedElementNameSketchPatio23 As String
+		Dim strSelectionTypeNameSketchPatio23 As String
+		Dim strSelectedElementTypeNameSketchPatio23 As String
+		Dim strSelectionTypeSketchPatio23 As String
+		Dim iPopupSketchPatio23 As Integer
+
+		Set oMySelectionSketchPatio23 = partDocumentCubierta.Selection
+		Set selMySelectionSketchPatio23 = oMySelectionSketchPatio23
+		anyObjFilterSketchPatio23(0) = "AnyObject"
+
+		oMySelectionSketchPatio23.Clear
+
+		StatusSketchPatio23 = oMySelectionSketchPatio23.SelectElement3(anyObjFilterSketchPatio23, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementSketchPatio23 = oMySelectionSketchPatio23.Item(1)
+		Set oElementSketchPatio23 = oMySelectionSketchPatio23.Item(1).Value
+
+		strSelectionNameSketchPatio23 = oMySelectionSketchPatio23.Item(1).Name
+		strSelectionTypeSketchPatio23 = oMySelectionSketchPatio23.Item(1).Type
+		strSelectionTypeNameSketchPatio23 = TypeName(oMySelectionSketchPatio23.Item(1))
+		strSelectedElementNameSketchPatio23 = oElementSketchPatio23.Name
+		strSelectedElementTypeNameSketchPatio23 = TypeName(oElementSketchPatio23)
+
+		' iPopupSketchPatio = MsgBox( _
+		' "Selection.Name = " + strSelectionNameSketchPatio + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeSketchPatio + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameSketchPatio + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameSketchPatio + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchPatio, _
+		' vbOKCancel, "VB Type Tester")
+
+		If strSelectedElementTypeNameSketchPatio23 <> "Sketch" Then
+			MsgBox("No ha seleccionado un boceto")
+			Exit Sub
+		End If
+
+		Dim difCotaPatio23 As Double
+		difCotaPatio23 = 0
+		difCotaPatio23 = InputBox("¿Que diferencia de cota tiene el patio nº 2 con el resto de la cubierta?","Diferencia de cota en el patio nº 2", difCotaPatio23)
+
+		'Pedir la inclinacion de los faldones del patio 2
+		Dim anguloPatio23 As Double
+		Dim anguloRadPatio23 As Double
+		Dim alphaPatio23 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloPatio23 As Integer
+		tipoAnguloPatio23 = 1
+		tipoAnguloPatio23 = InputBox("¿Cómo va a intrducir la pendiente del patio interior numero 2? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente Patio Interior 2", tipoAnguloPatio23)
+
+		If tipoAnguloPatio23 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloPatio23 = 45
+			anguloPatio23 = InputBox("Por favor introduzca el ángulo del patio nº 2 en grados, con respecto a la horizontal.","Pendiente del patio nº 2", anguloPatio23)
+		ElseIf tipoAnguloPatio23 = 2 Then
+			Dim porcentajePatio23 As Double
+			porcentajePatio23 = 100
+			porcentajePatio23 = InputBox("Por favor introduzca la pendiente del patio nº 2 en porcentaje, sin incluir el simbolo %.","Pendiente del patio nº 2", porcentajePatio23)
+			anguloRadPatio23 = Atn(porcentajePatio23/100)
+			anguloPatio23 = anguloRadPatio23*(180/3.141592)
+		ElseIf tipoAnguloPatio23 = 3 Then
+			Dim fraccionPatio23 As String
+			fraccionPatio23 = "2/3"
+			fraccionPatio23 = InputBox("Por favor introduzca la fracción de la pendiente del patio nº 2, en el formato X/Y ","Pendiente del patio nº 2", fraccionPatio23)
+			Dim frac1Patio23 As Integer
+			Dim frac2Patio23 As Integer
+			Dim fraccionDoublePatio23 As Double
+			For a = 1 To Len(fraccionPatio23)
+				If Mid(fraccionPatio23,a,1) = "/" Then
+					frac1Patio23 = CInt(Left(fraccionPatio23, a-1))
+					frac2Patio23 = Cint(Right(fraccionPatio23, Len(fraccionPatio23)-a))
+					fraccionDoublePatio23 = frac1Patio23/ frac2Patio23
+				End If
+			Next
+			anguloRadPatio23 = Atn(fraccionDoublePatio23)
+			anguloPatio23 = anguloRadPatio23*(180/3.141592)
+		Else
+			MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+			Exit Sub
+		End If
+		alphaPatio23 = 90 - anguloPatio23
+
+
+		'---------------------------------------------------------------
+		'-------------PATIO 3-------------------------------------------
+		'---------------------------------------------------------------
+
+		MsgBox("Por favor, seleccione desde el arbol de componentes el boceto sobre el que se va a realizar el patio interior número 3")
+
+		Dim anyObjFilterSketchPatio3(0)
+		Dim oMySelectionSketchPatio3 As Object
+		Dim selMySelectionSketchPatio3 As Selection
+		Dim StatusSketchPatio3 As String
+		Dim oSelectedElementSketchPatio3 As SelectedElement
+		Dim oElementSketchPatio3 As Object
+		Dim strSelectionNameSketchPatio3 As String
+		Dim strSelectedElementNameSketchPatio3 As String
+		Dim strSelectionTypeNameSketchPatio3 As String
+		Dim strSelectedElementTypeNameSketchPatio3 As String
+		Dim strSelectionTypeSketchPatio3 As String
+		Dim iPopupSketchPatio3 As Integer
+
+		Set oMySelectionSketchPatio3 = partDocumentCubierta.Selection
+		Set selMySelectionSketchPatio3 = oMySelectionSketchPatio3
+		anyObjFilterSketchPatio3(0) = "AnyObject"
+
+		oMySelectionSketchPatio3.Clear
+
+		StatusSketchPatio3 = oMySelectionSketchPatio3.SelectElement3(anyObjFilterSketchPatio3, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementSketchPatio3 = oMySelectionSketchPatio3.Item(1)
+		Set oElementSketchPatio3 = oMySelectionSketchPatio3.Item(1).Value
+
+		strSelectionNameSketchPatio3 = oMySelectionSketchPatio3.Item(1).Name
+		strSelectionTypeSketchPatio3 = oMySelectionSketchPatio3.Item(1).Type
+		strSelectionTypeNameSketchPatio3 = TypeName(oMySelectionSketchPatio3.Item(1))
+		strSelectedElementNameSketchPatio3 = oElementSketchPatio3.Name
+		strSelectedElementTypeNameSketchPatio3 = TypeName(oElementSketchPatio3)
+
+		' iPopupSketchPatio = MsgBox( _
+		' "Selection.Name = " + strSelectionNameSketchPatio + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeSketchPatio + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameSketchPatio + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameSketchPatio + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameSketchPatio, _
+		' vbOKCancel, "VB Type Tester")
+
+		If strSelectedElementTypeNameSketchPatio3 <> "Sketch" Then
+			MsgBox("No ha seleccionado un boceto")
+			Exit Sub
+		End If
+
+		Dim difCotaPatio3 As Double
+		difCotaPatio3 = 0
+		difCotaPatio3 = InputBox("¿Que diferencia de cota tiene el patio nº 3 con el resto de la cubierta?","Diferencia de cota en el patio número 3", difCotaPatio3)
+
+		'Pedir la inclinacion de los faldones del patio 3
+		Dim anguloPatio3 As Double
+		Dim anguloRadPatio3 As Double
+		Dim alphaPatio3 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloPatio3 As Integer
+		tipoAnguloPatio3 = 1
+		tipoAnguloPatio3 = InputBox("¿Cómo va a intrducir la pendiente del patio interior numero 2? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente Patio Interior 2", tipoAnguloPatio3)
+
+		If tipoAnguloPatio3 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloPatio3 = 45
+			anguloPatio3 = InputBox("Por favor introduzca el ángulo del patio nº 3 en grados, con respecto a la horizontal.","Pendiente del patio nº 3", anguloPatio3)
+		ElseIf tipoAnguloPatio3 = 2 Then
+			Dim porcentajePatio3 As Double
+			porcentajePatio3 = 100
+			porcentajePatio3 = InputBox("Por favor introduzca la pendiente del patio nº 3 en porcentaje, sin incluir el simbolo %.","Pendiente del patio nº 3", porcentajePatio3)
+			anguloRadPatio3 = Atn(porcentajePatio2/100)
+			anguloPatio3 = anguloRadPatio2*(180/3.141592)
+		ElseIf tipoAnguloPatio3 = 3 Then
+			Dim fraccionPatio3 As String
+			fraccionPatio3 = "2/3"
+			fraccionPatio3 = InputBox("Por favor introduzca la fracción de la pendiente del patio nº 3, en el formato X/Y ","Pendiente del patio nº 3", fraccionPatio3)
+			Dim frac1Patio3 As Integer
+			Dim frac2Patio3 As Integer
+			Dim fraccionDoublePatio3 As Double
+			For a = 1 To Len(fraccionPatio3)
+				If Mid(fraccionPatio3,a,1) = "/" Then
+					frac1Patio3 = CInt(Left(fraccionPatio2, a-1))
+					frac2Patio3 = Cint(Right(fraccionPatio3, Len(fraccionPatio3)-a))
+					fraccionDoublePatio3 = frac1Patio3 / frac2Patio3
+				End If
+			Next
+			anguloRadPatio3 = Atn(fraccionDoublePatio3)
+			anguloPatio3 = anguloRadPatio3*(180/3.141592)
+		Else
+			MsgBox("No ha introducido una opción válida, se va a cerrar el programa")
+			Exit Sub
+		End If
+		alphaPatio3 = 90 - anguloPatio3
+
+
+	End If
+
+	Dim medianera As Boolean
+	medianera = False
+
+	Dim result
+	result = MsgBox ("¿Quiere una medianera?", vbYesNo, "Medianera")
+
+	Select Case result
+	Case vbYes
+		medianera = True
+	Case vbNo
+		medianera = False
+	End Select
+
+	Dim numFaldonPendiente As Integer
+	numFaldonPendiente = 0
+	numFaldonPendiente = InputBox("¿Cuántos faldones a distinta pendiente quiere? " & vbCrLf & "Si no quiere ninguno, introduzca 0." & vbCrLf & "Como máximo puede tener 3 faldones con distinta pendiente" ,"Faldones a distinta pendiente", numFaldonPendiente)
+
+	Dim verticeCota As Boolean
+	verticeCota = False
+	result = MsgBox ("¿Quiere un vértice fuera de cota?", vbYesNo, "Vertice fuera de cota")
+
+	Select Case result
+	Case vbYes
+		verticeCota = True
+	Case vbNo
+		verticeCota = False
+	End Select
+
+	If resultPatioInterior = 1 Then
+		'Como se va modificar el sketch de la cubierta, hay que copiar y pegar en el cuerpo nuevo 
+		'el sketch del patio para poder eliminarlo y eliminar las constraints
+		'Se crea un cuerpo donde hacer el desmoldeo del patio
+		Dim bodyPatio1 As Body
+		Set bodyPatio1 = bodiesCubierta.Add()
+
+		partCubierta.InWorkObject = bodyCubierta
+		Dim selectionCopyPatio1 As Selection
+		Set selectionCopyPatio1 = partDocumentCubierta.Selection
+
+		selectionCopyPatio1.Clear
+		selectionCopyPatio1.Add oElementSketchPatio1
+		selectionCopyPatio1.Copy
+
+		partCubierta.InWorkObject = bodyPatio1
+
+		'-------AÑADIDO----------
+		'Crear un plano con la diferencia de cota que se haya indicado
+		Dim hybridShapeFactoryPatio1 As Factory
+		Set hybridShapeFactoryPatio1 = partCubierta.HybridShapeFactory
+
+		Dim originElementsPatio1 As OriginElements
+		Set originElementsPatio1 = partCubierta.OriginElements
+
+		Dim hybridShapePlaneExplicitPatio1 As AnyObject
+		Set hybridShapePlaneExplicitPatio1 = originElementsPatio1.PlaneXY
+
+		Dim refPlanoXyPatio1 As Reference
+		Set refPlanoXyPatio1 = partCubierta.CreateReferenceFromObject(hybridShapePlaneExplicitPatio1)
+
+		Dim hybridShapePlaneOffsetPatio1 As HybridShapePlaneOffset
+		Set hybridShapePlaneOffsetPatio1 = hybridShapeFactoryPatio1.AddNewPlaneOffset(refPlanoXyPatio1, difCotaPatio1, False)
+
+		bodyPatio1.InsertHybridShape hybridShapePlaneOffsetPatio1
+		'-----------------------
+
+		Dim selectionPastePatio1
+		Set selectionPastePatio1 = partDocumentCubierta.Selection
+		selectionPastePatio1.Clear 
+		selectionPastePatio1.Add hybridShapePlaneOffsetPatio1
+		selectionPastePatio1.Paste 
+
+
+		Dim sketchesPatio1 As Sketches
+		Set sketchesPatio1 = bodyPatio1.Sketches
+
+		Dim sketchBodyPatio1 As Sketch
+		Set sketchBodyPatio1 = sketchesPatio1.Item(1)
+
+		Dim sketchBodyPatioName1 As String
+		sketchBodyPatioName1 = sketchBodyPatio1.Name
+
+		Dim selectionDeletePatio1 As Selection
+		Set selectionDeletePatio1 = partDocumentCubierta.Selection
+
+		selectionCopyPatio1.Clear
+		selectionCopyPatio1.Add oElementSketchPatio1
+		selectionCopyPatio1.Delete
+
+		Dim factory2DPatio1 As Factory2D
+		Set factory2DPatio1 = sketchBodyPatio1.OpenEdition()
+
+		Dim geometricElementsPatio1 As GeometricElements
+		Set geometricElementsPatio1 = sketchBodyPatio1.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsPatio1 As Constraints
+		Set constraintsPatio1 = sketchBodyPatio1.Constraints
+		'Desactivamso todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintPatio1 As Constraint
+
+		For i = 1 To constraintsPatio1.Count
+			Set constraintPatio1 = constraintsPatio1.Item(i)
+			constraintPatio1.Deactivate
+		Next
+
+	ElseIf resultPatioInterior = 2 Then
+
+		'-----------------------------------------------------------------------------
+		'-------------------- PATIO 1 ------------------------------------------------
+		'-----------------------------------------------------------------------------
+		Dim bodyPatio12 As Body
+		Set bodyPatio12 = bodiesCubierta.Add()
+
+		partCubierta.InWorkObject = bodyCubierta
+		Dim selectionCopyPatio12 As Selection
+		Set selectionCopyPatio12 = partDocumentCubierta.Selection
+
+		selectionCopyPatio12.Clear
+		selectionCopyPatio12.Add oElementSketchPatio12
+		selectionCopyPatio12.Copy
+
+		partCubierta.InWorkObject = bodyPatio12
+		'Crear un plano con la diferencia de cota que se haya indicado
+		Dim hybridShapeFactoryPatio12 As Factory
+		Set hybridShapeFactoryPatio12 = partCubierta.HybridShapeFactory
+
+		Dim originElementsPatio12 As OriginElements
+		Set originElementsPatio12 = partCubierta.OriginElements
+
+		Dim hybridShapePlaneExplicitPatio12 As AnyObject
+		Set hybridShapePlaneExplicitPatio12 = originElementsPatio12.PlaneXY
+
+		Dim refPlanoXyPatio12 As Reference
+		Set refPlanoXyPatio12 = partCubierta.CreateReferenceFromObject(hybridShapePlaneExplicitPatio12)
+
+		Dim hybridShapePlaneOffsetPatio12 As HybridShapePlaneOffset
+		Set hybridShapePlaneOffsetPatio12 = hybridShapeFactoryPatio12.AddNewPlaneOffset(refPlanoXyPatio12, difCotaPatio12, False)
+
+		bodyPatio12.InsertHybridShape hybridShapePlaneOffsetPatio12
+
+		Dim selectionPastePatio12
+		Set selectionPastePatio12 = partDocumentCubierta.Selection
+		selectionPastePatio12.Clear 
+		selectionPastePatio12.Add hybridShapePlaneOffsetPatio12
+		selectionPastePatio12.Paste 
+
+		Dim sketchesPatio12 As Sketches
+		Set sketchesPatio12 = bodyPatio12.Sketches
+
+		Dim sketchBodyPatio12 As Sketch
+		Set sketchBodyPatio12 = sketchesPatio12.Item(1)
+
+		Dim sketchBodyPatioName12 As String
+		sketchBodyPatioName12 = sketchBodyPatio12.Name
+
+		Dim selectionDeletePatio12 As Selection
+		Set selectionDeletePatio12 = partDocumentCubierta.Selection
+
+		selectionCopyPatio12.Clear
+		selectionCopyPatio12.Add oElementSketchPatio12
+		selectionCopyPatio12.Delete
+
+		Dim factory2DPatio12 As Factory2D
+		Set factory2DPatio12 = sketchBodyPatio12.OpenEdition()
+
+		Dim geometricElementsPatio12 As GeometricElements
+		Set geometricElementsPatio12 = sketchBodyPatio12.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsPatio12 As Constraints
+		Set constraintsPatio12 = sketchBodyPatio12.Constraints
+		'Desactivamso todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintPatio12 As Constraint
+
+		For i = 1 To constraintsPatio12.Count
+			Set constraintPatio12 = constraintsPatio12.Item(i)
+			constraintPatio12.Deactivate
+		Next
+
+		'-----------------------------------------------------------------------------
+		'-------------------- PATIO 2 ------------------------------------------------
+		'-----------------------------------------------------------------------------
+
+		Dim bodyPatio2 As Body
+		Set bodyPatio2 = bodiesCubierta.Add()
+
+		partCubierta.InWorkObject = bodyCubierta
+		Dim selectionCopyPatio2 As Selection
+		Set selectionCopyPatio2 = partDocumentCubierta.Selection
+
+		selectionCopyPatio2.Clear
+		selectionCopyPatio2.Add oElementSketchPatio2
+		selectionCopyPatio2.Copy
+
+		partCubierta.InWorkObject = bodyPatio2
+
+		'Crear un plano con la diferencia de cota que se haya indicado
+		Dim hybridShapeFactoryPatio2 As Factory
+		Set hybridShapeFactoryPatio2 = partCubierta.HybridShapeFactory
+
+		Dim originElementsPatio2 As OriginElements
+		Set originElementsPatio2 = partCubierta.OriginElements
+
+		Dim hybridShapePlaneExplicitPatio2 As AnyObject
+		Set hybridShapePlaneExplicitPatio2 = originElementsPatio2.PlaneXY
+
+		Dim refPlanoXyPatio2 As Reference
+		Set refPlanoXyPatio2 = partCubierta.CreateReferenceFromObject(hybridShapePlaneExplicitPatio2)
+
+		Dim hybridShapePlaneOffsetPatio2 As HybridShapePlaneOffset
+		Set hybridShapePlaneOffsetPatio2 = hybridShapeFactoryPatio2.AddNewPlaneOffset(refPlanoXyPatio2, difCotaPatio2, False)
+
+		bodyPatio2.InsertHybridShape hybridShapePlaneOffsetPatio2
+
+		Dim selectionPastePatio2
+		Set selectionPastePatio2 = partDocumentCubierta.Selection
+		selectionPastePatio2.Clear 
+		selectionPastePatio2.Add hybridShapePlaneOffsetPatio2
+		selectionPastePatio2.Paste 
+
+		Dim sketchesPatio2 As Sketches
+		Set sketchesPatio2 = bodyPatio2.Sketches
+
+		Dim sketchBodyPatio2 As Sketch
+		Set sketchBodyPatio2 = sketchesPatio2.Item(1)
+
+		Dim sketchBodyPatioName2 As String
+		sketchBodyPatioName2 = sketchBodyPatio2.Name
+
+		Dim selectionDeletePatio2 As Selection
+		Set selectionDeletePatio2 = partDocumentCubierta.Selection
+
+		selectionCopyPatio2.Clear
+		selectionCopyPatio2.Add oElementSketchPatio2
+		selectionCopyPatio2.Delete
+
+		Dim factory2DPatio2 As Factory2D
+		Set factory2DPatio2 = sketchBodyPatio2.OpenEdition()
+
+		Dim geometricElementsPatio2 As GeometricElements
+		Set geometricElementsPatio2 = sketchBodyPatio2.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsPatio2 As Constraints
+		Set constraintsPatio2 = sketchBodyPatio2.Constraints
+		'Desactivamso todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintPatio2 As Constraint
+
+		For i = 1 To constraintsPatio2.Count
+			Set constraintPatio2 = constraintsPatio2.Item(i)
+			constraintPatio2.Deactivate
+		Next
+
+	ElseIf resultPatioInterior = 3 Then
+		
+		'-----------------------------------------------------------------------------
+		'-------------------- PATIO 1 ------------------------------------------------
+		'-----------------------------------------------------------------------------
+		Dim bodyPatio13 As Body
+		Set bodyPatio13 = bodiesCubierta.Add()
+
+		partCubierta.InWorkObject = bodyCubierta
+		Dim selectionCopyPatio13 As Selection
+		Set selectionCopyPatio13 = partDocumentCubierta.Selection
+
+		selectionCopyPatio13.Clear
+		selectionCopyPatio13.Add oElementSketchPatio13
+		selectionCopyPatio13.Copy
+
+		partCubierta.InWorkObject = bodyPatio13
+
+		'Crear un plano con la diferencia de cota que se haya indicado
+		Dim hybridShapeFactoryPatio13 As Factory
+		Set hybridShapeFactoryPatio13 = partCubierta.HybridShapeFactory
+
+		Dim originElementsPatio13 As OriginElements
+		Set originElementsPatio13 = partCubierta.OriginElements
+
+		Dim hybridShapePlaneExplicitPatio13 As AnyObject
+		Set hybridShapePlaneExplicitPatio13 = originElementsPatio13.PlaneXY
+
+		Dim refPlanoXyPatio13 As Reference
+		Set refPlanoXyPatio13 = partCubierta.CreateReferenceFromObject(hybridShapePlaneExplicitPatio13)
+
+		Dim hybridShapePlaneOffsetPatio13 As HybridShapePlaneOffset
+		Set hybridShapePlaneOffsetPatio13 = hybridShapeFactoryPatio13.AddNewPlaneOffset(refPlanoXyPatio13, difCotaPatio13, False)
+
+		bodyPatio13.InsertHybridShape hybridShapePlaneOffsetPatio13
+
+		Dim selectionPastePatio13
+		Set selectionPastePatio13 = partDocumentCubierta.Selection
+		selectionPastePatio13.Clear 
+		selectionPastePatio13.Add hybridShapePlaneOffsetPatio13
+		selectionPastePatio13.Paste 
+
+		Dim sketchesPatio13 As Sketches
+		Set sketchesPatio13 = bodyPatio13.Sketches
+
+		Dim sketchBodyPatio13 As Sketch
+		Set sketchBodyPatio13 = sketchesPatio13.Item(1)
+
+		Dim sketchBodyPatioName13 As String
+		sketchBodyPatioName13 = sketchBodyPatio13.Name
+
+		Dim selectionDeletePatio13 As Selection
+		Set selectionDeletePatio13 = partDocumentCubierta.Selection
+
+		selectionCopyPatio13.Clear
+		selectionCopyPatio13.Add oElementSketchPatio13
+		selectionCopyPatio13.Delete
+
+		Dim factory2DPatio13 As Factory2D
+		Set factory2DPatio13 = sketchBodyPatio13.OpenEdition()
+
+		Dim geometricElementsPatio13 As GeometricElements
+		Set geometricElementsPatio13 = sketchBodyPatio13.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsPatio13 As Constraints
+		Set constraintsPatio13 = sketchBodyPatio13.Constraints
+		'Desactivamso todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintPatio13 As Constraint
+
+		For i = 1 To constraintsPatio13.Count
+			Set constraintPatio13 = constraintsPatio13.Item(i)
+			constraintPatio13.Deactivate
+		Next
+
+		'-----------------------------------------------------------------------------
+		'-------------------- PATIO 2 ------------------------------------------------
+		'-----------------------------------------------------------------------------
+
+		Dim bodyPatio23 As Body
+		Set bodyPatio23 = bodiesCubierta.Add()
+
+		partCubierta.InWorkObject = bodyCubierta
+		Dim selectionCopyPatio23 As Selection
+		Set selectionCopyPatio23 = partDocumentCubierta.Selection
+
+		selectionCopyPatio23.Clear
+		selectionCopyPatio23.Add oElementSketchPatio23
+		selectionCopyPatio23.Copy
+
+		partCubierta.InWorkObject = bodyPatio23
+
+		'Crear un plano con la diferencia de cota que se haya indicado
+		Dim hybridShapeFactoryPatio23 As Factory
+		Set hybridShapeFactoryPatio23 = partCubierta.HybridShapeFactory
+
+		Dim originElementsPatio23 As OriginElements
+		Set originElementsPatio23 = partCubierta.OriginElements
+
+		Dim hybridShapePlaneExplicitPatio23 As AnyObject
+		Set hybridShapePlaneExplicitPatio23 = originElementsPatio13.PlaneXY
+
+		Dim refPlanoXyPatio23 As Reference
+		Set refPlanoXyPatio23 = partCubierta.CreateReferenceFromObject(hybridShapePlaneExplicitPatio23)
+
+		Dim hybridShapePlaneOffsetPatio23 As HybridShapePlaneOffset
+		Set hybridShapePlaneOffsetPatio23 = hybridShapeFactoryPatio13.AddNewPlaneOffset(refPlanoXyPatio23, difCotaPatio23, False)
+
+		bodyPatio13.InsertHybridShape hybridShapePlaneOffsetPatio23
+
+
+		Dim selectionPastePatio23
+		Set selectionPastePatio23 = partDocumentCubierta.Selection
+		selectionPastePatio23.Clear 
+		selectionPastePatio23.Add hybridShapePlaneOffsetPatio23
+		selectionPastePatio23.Paste 
+
+		Dim sketchesPatio23 As Sketches
+		Set sketchesPatio23 = bodyPatio23.Sketches
+
+		Dim sketchBodyPatio23 As Sketch
+		Set sketchBodyPatio23 = sketchesPatio23.Item(1)
+
+		Dim sketchBodyPatioName23 As String
+		sketchBodyPatioName23 = sketchBodyPatio23.Name
+
+		Dim selectionDeletePatio23 As Selection
+		Set selectionDeletePatio23 = partDocumentCubierta.Selection
+
+		selectionCopyPatio23.Clear
+		selectionCopyPatio23.Add oElementSketchPatio23
+		selectionCopyPatio23.Delete
+
+		Dim factory2DPatio23 As Factory2D
+		Set factory2DPatio23 = sketchBodyPatio23.OpenEdition()
+
+		Dim geometricElementsPatio23 As GeometricElements
+		Set geometricElementsPatio23 = sketchBodyPatio23.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsPatio23 As Constraints
+		Set constraintsPatio23 = sketchBodyPatio23.Constraints
+		'Desactivamso todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintPatio23 As Constraint
+
+		For i = 1 To constraintsPatio23.Count
+			Set constraintPatio23 = constraintsPatio23.Item(i)
+			constraintPatio23.Deactivate
+		Next
+
+		'-----------------------------------------------------------------------------
+		'-------------------- PATIO 3 ------------------------------------------------
+		'-----------------------------------------------------------------------------
+
+		Dim bodyPatio3 As Body
+		Set bodyPatio3 = bodiesCubierta.Add()
+
+		partCubierta.InWorkObject = bodyCubierta
+		Dim selectionCopyPatio3 As Selection
+		Set selectionCopyPatio3 = partDocumentCubierta.Selection
+
+		selectionCopyPatio3.Clear
+		selectionCopyPatio3.Add oElementSketchPatio3
+		selectionCopyPatio3.Copy
+
+		partCubierta.InWorkObject = bodyPatio3
+
+		'Crear un plano con la diferencia de cota que se haya indicado
+		Dim hybridShapeFactoryPatio3 As Factory
+		Set hybridShapeFactoryPatio3 = partCubierta.HybridShapeFactory
+
+		Dim originElementsPatio3 As OriginElements
+		Set originElementsPatio3 = partCubierta.OriginElements
+
+		Dim hybridShapePlaneExplicitPatio3 As AnyObject
+		Set hybridShapePlaneExplicitPatio3 = originElementsPatio13.PlaneXY
+
+		Dim refPlanoXyPatio3 As Reference
+		Set refPlanoXyPatio3 = partCubierta.CreateReferenceFromObject(hybridShapePlaneExplicitPatio3)
+
+		Dim hybridShapePlaneOffsetPatio3 As HybridShapePlaneOffset
+		Set hybridShapePlaneOffsetPatio3 = hybridShapeFactoryPatio3.AddNewPlaneOffset(refPlanoXyPatio3, difCotaPatio3, False)
+
+		bodyPatio13.InsertHybridShape hybridShapePlaneOffsetPatio3
+
+
+		Dim selectionPastePatio3
+		Set selectionPastePatio3 = partDocumentCubierta.Selection
+		selectionPastePatio3.Clear 
+		selectionPastePatio3.Add hybridShapePlaneOffsetPatio3
+		selectionPastePatio3.Paste 
+
+		Dim sketchesPatio3 As Sketches
+		Set sketchesPatio3 = bodyPatio3.Sketches
+
+		Dim sketchBodyPatio3 As Sketch
+		Set sketchBodyPatio3 = sketchesPatio3.Item(1)
+
+		Dim sketchBodyPatioName3 As String
+		sketchBodyPatioName3 = sketchBodyPatio3.Name
+
+		Dim selectionDeletePatio3 As Selection
+		Set selectionDeletePatio3 = partDocumentCubierta.Selection
+
+		selectionCopyPatio3.Clear
+		selectionCopyPatio3.Add oElementSketchPatio3
+		selectionCopyPatio3.Delete
+
+		Dim factory2DPatio3 As Factory2D
+		Set factory2DPatio3 = sketchBodyPatio3.OpenEdition()
+
+		Dim geometricElementsPatio3 As GeometricElements
+		Set geometricElementsPatio3 = sketchBodyPatio3.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsPatio3 As Constraints
+		Set constraintsPatio3 = sketchBodyPatio3.Constraints
+		'Desactivamso todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintPatio3 As Constraint
+
+		For i = 1 To constraintsPatio3.Count
+			Set constraintPatio3 = constraintsPatio3.Item(i)
+			constraintPatio3.Deactivate
+		Next	
+	End if
+
+	partCubierta.InWorkObject = bodyCubierta
+
+	'Se asigna el sketch seleccionado para la cubierta
+	Dim sketchesCubierta As Sketches
+	Set sketchesCubierta = bodyCubierta.Sketches
+
+	Dim sketchCubierta As Sketch
+	Set sketchCubierta = sketchesCubierta.Item(strSelectedElementNameSketchCubierta)
+
+	Dim geoList As Collection
+	Set geoList = sketchCubierta.GeometricElements
+
+	Dim geomCount As Double
+	geomCount = geoList.Count
+
+	'Esto es para obtener la longitud del lado más largo
+	Dim genericObject As Object
+	Dim coords(1) As Double
+	Dim xCoord1 As Double
+	Dim yCoord1 As Double
+	Dim xCoord2 As Double
+	Dim yCoord2 As Double
+	Dim thisSide As Double
+	Dim longestSide As Double
+
+	xCoord1 = 0
+	yCoord1 = 0
+	longestSide = 0
+	For a = 1 To geoList.Count
+		Set genericObject = geoList.Item(a)
+		If TypeName(genericObject) = "Point2D" Then
+			genericObject.GetCoordinates(coords)
+			xCoord2 = coords(0)
+			yCoord2 = coords(1)
+			thisSide = Sqr((xCoord2-xCoord1)^2+(yCoord2-yCoord1)^2)
+			If thisSide > longestSide Then
+				longestSide = thisSide
+			End If
+			xCoord1 = xCoord2
+			yCoord1 = yCoord2
+		End If
+	Next
+	'Esta ultima linea esta porque el primer punto que se cuenta es el final de la primera linea
+	xCoord2 = 0
+	yCoord2 = 0
+	thisSide = Sqr((xCoord2-xCoord1)^2+(yCoord2-yCoord1)^2)
+	If thisSide > longestSide Then
+		longestSide = thisSide
+	End If
+
+	'Contamos cuantas caras tiene el pad/aristas tiene el sketch para usarlo luego.
+	'Se cuenta la mitad de los elementos ya que la otra mitad son puntos.
+	Dim nCaras As Integer
+	nCaras = geomCount / 2
+
+	Dim height As Double
+	height = (Tan(angulo* 3.141592 / 180) * longestSide) * 1.1
+
+	Dim padCubierta As Pad
+	Set padCubierta = shapeFactoryCubierta.AddNewPad(sketchCubierta, height)
+
+	Dim padCubiertaName As String
+	padCubiertaName = padCubierta.Name
+
+	partCubierta.Update
+
+	'------------SELECCIÓN DE CARA--------------------------
+	Dim strBRepName As String
+	strBrepName = ""
+	If medianera = True Then
+		MsgBox("Por favor, seleccione la cara donde se encuentra la medianera")
+
+		Dim anyObjFilterMedianera(0)
+		Dim oMySelectionMedianera As Object
+		Dim selMySelectionMedianera As Selection
+		Dim StatusMedianera As String
+		Dim oSelectedElementMedianera As SelectedElement
+		Dim oElementMedianera As Object
+		Dim strSelectionNameMedianera As String
+		Dim strSelectedElementNameMedianera As String
+		Dim strSelectionTypeNameMedianera As String
+		Dim strSelectedElementTypeNameMedianera As String
+		Dim strSelectionTypeMedianera As String
+		Dim iPopupMedianera As Integer
+
+		Set oMySelectionMedianera = partDocumentCubierta.Selection
+		Set selMySelectionMedianera = oMySelectionMedianera
+		anyObjFilterMedianera(0) = "AnyObject"
+
+		oMySelectionMedianera.Clear
+
+		StatusMedianera = oMySelectionMedianera.SelectElement3(anyObjFilterMedianera, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementMedianera = oMySelectionMedianera.Item(1)
+		Set oElementMedianera = oMySelectionMedianera.Item(1).Value
+
+		strSelectionNameMedianera = oMySelectionMedianera.Item(1).Name
+		strSelectionTypeMedianera = oMySelectionMedianera.Item(1).Type
+		strSelectionTypeNameMedianera = TypeName(oMySelectionMedianera.Item(1))
+		strSelectedElementNameMedianera = oElementMedianera.Name
+		strSelectedElementTypeNameMedianera = TypeName(oElementMedianera)
+
+		'iPopupMedianera = MsgBox( _
+		'"Selection.Name = " + strSelectionNameMedianera + vbCrLf + _
+		'"Selection.Type = " + strSelectionTypeMedianera + vbCrLf + _
+		'"Selection TypeName = " + strSelectionTypeNameMedianera + vbCrLf + _
+		'"SelectedElement.Name = " + strSelectedElementNameMedianera + vbCrLf + _
+		'"SelectedElement TypeName = " + strSelectedElementTypeNameMedianera, _
+		'vbOKCancel, "VB Type Tester")
+
+		Dim referenceFace1 As Reference
+
+		strBrepName = Replace(strSelectedElementNameMedianera,"Selection_","")
+		'strBrepName = Replace(strBrepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBrepName = Replace(strBrepName,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+	End If
+
+	If numFaldonPendiente = 1 Then
+		Dim strBRepNameFaldon1 As String
+		strBrepNameFaldon1 = ""
+
+		MsgBox("Por favor, seleccione la cara donde se encuentra el faldon con distinta pendiente nº 1")
+
+		Dim anyObjFilterFaldon1(0)
+		Dim oMySelectionFaldon1 As Object
+		Dim selMySelectionFaldon1 As Selection
+		Dim StatusFaldon1 As String
+		Dim oSelectedElementFaldon1 As SelectedElement
+		Dim oElementFaldon1 As Object
+		Dim strSelectionNameFaldon1 As String
+		Dim strSelectedElementNameFaldon1 As String
+		Dim strSelectionTypeNameFaldon1 As String
+		Dim strSelectedElementTypeNameFaldon1 As String
+		Dim strSelectionTypeFaldon1 As String
+		Dim iPopupFaldon1 As Integer
+
+		Set oMySelectionFaldon1 = partDocumentCubierta.Selection
+		Set selMySelectionFaldon1 = oMySelectionFaldon1
+		anyObjFilterFaldon1(0) = "AnyObject"
+
+		oMySelectionFaldon1.Clear
+
+		StatusFaldon1 = oMySelectionFaldon1.SelectElement3(anyObjFilterFaldon1, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementFaldon1 = oMySelectionFaldon1.Item(1)
+		Set oElementFaldon1 = oMySelectionFaldon1.Item(1).Value
+
+		strSelectionNameFaldon1 = oMySelectionFaldon1.Item(1).Name
+		strSelectionTypeFaldon1 = oMySelectionFaldon1.Item(1).Type
+		strSelectionTypeNameFaldon1 = TypeName(oMySelectionFaldon1.Item(1))
+		strSelectedElementNameFaldon1 = oElementFaldon1.Name
+		strSelectedElementTypeNameFaldon1 = TypeName(oElementFaldon1)
+
+		' iPopupFaldon = MsgBox( _
+		' "Selection.Name = " + strSelectionNameFaldon + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeFaldon + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameFaldon + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameFaldon + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameFaldon, _
+		' vbOKCancel, "VB Type Tester")
+
+		Dim referenceFaceFaldon1 As Reference
+
+		strBRepNameFaldon1 = Replace(strSelectedElementNameFaldon1,"Selection_","")
+		'strBRepName = Replace(strBRepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameFaldon1 = Replace(strBRepNameFaldon1,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+
+		Dim anguloFaldon1 As Double
+		Dim anguloRadFaldon1 As Double
+		Dim alphaFaldon1 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloFaldon1 As Integer
+		tipoAnguloFaldon1 = 1
+		tipoAnguloFaldon1 = InputBox("¿Cómo va a intrducir la pendiente del faldón nº 1? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente del faldón nº 1", tipoAnguloFaldon1)
+
+		If tipoAnguloFaldon1 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloFaldon1 = 45
+			anguloFaldon1 = InputBox("Por favor introduzca el ángulo del faldón nº 1 en grados, con respecto a la horizontal.","Pendiente del faldón nº 1", anguloFaldon1)
+		ElseIf tipoAnguloFaldon1 = 2 Then
+			Dim porcentajeFaldon1 As Double
+			porcentajeFaldon1 = 100
+			porcentajeFaldon1 = InputBox("Por favor introduzca la pendiente del faldón nº 1 en porcentaje, sin incluir el simbolo %.","Pendiente del faldón nº 1", porcentajeFaldon1)
+			anguloRadFaldon1 = Atn(porcentajeFaldon1/100)
+			anguloFaldon1 = anguloRadFaldon1*(180/3.141592)
+		ElseIf tipoAnguloFaldon1 = 3 Then
+			Dim fraccionFaldon1 As String
+			fraccionFaldon1 = "2/3"
+			fraccionFaldon1 = InputBox("Por favor introduzca la fracción de la pendiente del faldón nº 1, en el formato X/Y ","Pendiente del faldón nº 1", fraccionFaldon1)
+			Dim frac1Faldon1 As Integer
+			Dim frac2Faldon1 As Integer
+			Dim fraccionDoubleFaldon1 As Double
+			For a = 1 To Len(fraccionFaldon1)
+				If Mid(fraccionFaldon1,a,1) = "/" Then
+					frac1Faldon1 = CInt(Left(fraccionFaldon1, a-1))
+					frac2Faldon1 = Cint(Right(fraccionFaldon1, Len(fraccionFaldon1)-a))
+					fraccionDoubleFaldon1 = frac1Faldon1 / frac2Faldon1
+				End If
+			Next
+			anguloRadFaldon1 = Atn(fraccionDoubleFaldon1)
+			anguloFaldon1 = anguloRadFaldon1*(180/3.141592)
+		End If
+		alphaFaldon1 = 90 - anguloFaldon1
+	ElseIf numFaldonPendiente = 2 Then
+
+		'--------------------------------------------------------------------
+		'--------------FALDON 1----------------------------------------------
+		'--------------------------------------------------------------------
+		Dim strBRepNameFaldon12 As String
+		strBrepNameFaldon12 = ""
+
+		MsgBox("Por favor, seleccione la cara donde se encuentra el faldon con distinta pendiente número 1")
+
+		Dim anyObjFilterFaldon12(0)
+		Dim oMySelectionFaldon12 As Object
+		Dim selMySelectionFaldon12 As Selection
+		Dim StatusFaldon12 As String
+		Dim oSelectedElementFaldon12 As SelectedElement
+		Dim oElementFaldon12 As Object
+		Dim strSelectionNameFaldon12 As String
+		Dim strSelectedElementNameFaldon12 As String
+		Dim strSelectionTypeNameFaldon12 As String
+		Dim strSelectedElementTypeNameFaldon12 As String
+		Dim strSelectionTypeFaldon12 As String
+		Dim iPopupFaldon12 As Integer
+
+		Set oMySelectionFaldon12 = partDocumentCubierta.Selection
+		Set selMySelectionFaldon12 = oMySelectionFaldon12
+		anyObjFilterFaldon12(0) = "AnyObject"
+
+		oMySelectionFaldon12.Clear
+
+		StatusFaldon12 = oMySelectionFaldon12.SelectElement3(anyObjFilterFaldon12, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementFaldon12 = oMySelectionFaldon12.Item(1)
+		Set oElementFaldon12 = oMySelectionFaldon12.Item(1).Value
+
+		strSelectionNameFaldon12 = oMySelectionFaldon12.Item(1).Name
+		strSelectionTypeFaldon12 = oMySelectionFaldon12.Item(1).Type
+		strSelectionTypeNameFaldon12 = TypeName(oMySelectionFaldon12.Item(1))
+		strSelectedElementNameFaldon12 = oElementFaldon12.Name
+		strSelectedElementTypeNameFaldon12 = TypeName(oElementFaldon12)
+
+		' iPopupFaldon = MsgBox( _
+		' "Selection.Name = " + strSelectionNameFaldon + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeFaldon + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameFaldon + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameFaldon + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameFaldon, _
+		' vbOKCancel, "VB Type Tester")
+
+		Dim referenceFaceFaldon12 As Reference
+
+		strBRepNameFaldon12 = Replace(strSelectedElementNameFaldon12,"Selection_","")
+		'strBRepName = Replace(strBRepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameFaldon12 = Replace(strBRepNameFaldon12,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+
+		Dim anguloFaldon12 As Double
+		Dim anguloRadFaldon12 As Double
+		Dim alphaFaldon12 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloFaldon12 As Integer
+		tipoAnguloFaldon12 = 1
+		tipoAnguloFaldon12 = InputBox("¿Cómo va a intrducir la pendiente del faldón nº 1? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente del faldón nº 1", tipoAnguloFaldon12)
+
+		If tipoAnguloFaldon12 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloFaldon12 = 45
+			anguloFaldon12 = InputBox("Por favor introduzca el ángulo del faldón nº 1 en grados, con respecto a la horizontal.","Pendiente del faldón nº 1", anguloFaldon12)
+		ElseIf tipoAnguloFaldon12 = 2 Then
+			Dim porcentajeFaldon12 As Double
+			porcentajeFaldon12 = 100
+			porcentajeFaldon12 = InputBox("Por favor introduzca la pendiente del faldón nº 1 en porcentaje, sin incluir el simbolo %.","Pendiente de la cudel faldón nº 1bierta", porcentajeFaldon12)
+			anguloRadFaldon12 = Atn(porcentajeFaldon12/100)
+			anguloFaldon12 = anguloRadFaldon12*(180/3.141592)
+		ElseIf tipoAnguloFaldon12 = 3 Then
+			Dim fraccionFaldon12 As String
+			fraccionFaldon12 = "2/3"
+			fraccionFaldon12 = InputBox("Por favor introduzca la fracción de la pendiente del faldón nº 1, en el formato X/Y ","Pendiente del faldón nº 1", fraccionFaldon12)
+			Dim frac1Faldon12 As Integer
+			Dim frac2Faldon12 As Integer
+			Dim fraccionDoubleFaldon12 As Double
+			For a = 1 To Len(fraccionFaldon12)
+				If Mid(fraccionFaldon12,a,1) = "/" Then
+					frac1Faldon12 = CInt(Left(fraccionFaldon12, a-1))
+					frac2Faldon12 = Cint(Right(fraccionFaldon12, Len(fraccionFaldon12)-a))
+					fraccionDoubleFaldon12 = frac1Faldon12 / frac2Faldon12
+				End If
+			Next
+			anguloRadFaldon12 = Atn(fraccionDoubleFaldon12)
+			anguloFaldon12 = anguloRadFaldon12*(180/3.141592)
+		End If
+		alphaFaldon12 = 90 - anguloFaldon12
+
+		'--------------------------------------------------------------------------------------
+		'---------------FALDON 2---------------------------------------------------------------
+		'--------------------------------------------------------------------------------------
+		Dim strBRepNameFaldon2 As String
+		strBrepNameFaldon2 = ""
+
+		MsgBox("Por favor, seleccione la cara donde se encuentra el faldon con distinta pendiente número 2")
+
+		Dim anyObjFilterFaldon2(0)
+		Dim oMySelectionFaldon2 As Object
+		Dim selMySelectionFaldon2 As Selection
+		Dim StatusFaldon2 As String
+		Dim oSelectedElementFaldon2 As SelectedElement
+		Dim oElementFaldon2 As Object
+		Dim strSelectionNameFaldon2 As String
+		Dim strSelectedElementNameFaldon2 As String
+		Dim strSelectionTypeNameFaldon2 As String
+		Dim strSelectedElementTypeNameFaldon2 As String
+		Dim strSelectionTypeFaldon2 As String
+		Dim iPopupFaldon2 As Integer
+
+		Set oMySelectionFaldon2 = partDocumentCubierta.Selection
+		Set selMySelectionFaldon2 = oMySelectionFaldon2
+		anyObjFilterFaldon2(0) = "AnyObject"
+
+		oMySelectionFaldon2.Clear
+
+		StatusFaldon2 = oMySelectionFaldon2.SelectElement3(anyObjFilterFaldon2, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementFaldon2 = oMySelectionFaldon2.Item(1)
+		Set oElementFaldon2 = oMySelectionFaldon2.Item(1).Value
+
+		strSelectionNameFaldon2 = oMySelectionFaldon2.Item(1).Name
+		strSelectionTypeFaldon2 = oMySelectionFaldon2.Item(1).Type
+		strSelectionTypeNameFaldon2 = TypeName(oMySelectionFaldon2.Item(1))
+		strSelectedElementNameFaldon2 = oElementFaldon2.Name
+		strSelectedElementTypeNameFaldon2 = TypeName(oElementFaldon2)
+
+		' iPopupFaldon = MsgBox( _
+		' "Selection.Name = " + strSelectionNameFaldon + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeFaldon + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameFaldon + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameFaldon + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameFaldon, _
+		' vbOKCancel, "VB Type Tester")
+
+		Dim referenceFaceFaldon2 As Reference
+
+		strBRepNameFaldon2 = Replace(strSelectedElementNameFaldon2,"Selection_","")
+		'strBRepName = Replace(strBRepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameFaldon2 = Replace(strBRepNameFaldon2,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+
+		Dim anguloFaldon2 As Double
+		Dim anguloRadFaldon2 As Double
+		Dim alphaFaldon2 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloFaldon2 As Integer
+		tipoAnguloFaldon2 = 1
+		tipoAnguloFaldon2 = InputBox("¿Cómo va a intrducir la pendiente del faldón nº 2? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente del faldón nº 2", tipoAnguloFaldon2)
+
+		If tipoAnguloFaldon2 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloFaldon2 = 45
+			anguloFaldon2 = InputBox("Por favor introduzca el ángulo del faldón nº 2 en grados, con respecto a la horizontal.","Pendiente del faldón nº 2", anguloFaldon2)
+		ElseIf tipoAnguloFaldon2 = 2 Then
+			Dim porcentajeFaldon2 As Double
+			porcentajeFaldon2 = 100
+			porcentajeFaldon2 = InputBox("Por favor introduzca la pendiente del faldón nº 2 en porcentaje, sin incluir el simbolo %.","Pendiente del faldón nº 2", porcentajeFaldon2)
+			anguloRadFaldon2 = Atn(porcentajeFaldon2/100)
+			anguloFaldon2 = anguloRadFaldon2*(180/3.141592)
+		ElseIf tipoAnguloFaldon2 = 3 Then
+			Dim fraccionFaldon2 As String
+			fraccionFaldon2 = "2/3"
+			fraccionFaldon2 = InputBox("Por favor introduzca la fracción de la pendiente del faldón nº 2, en el formato X/Y ","Pendiente del faldón nº 2", fraccionFaldon2)
+			Dim frac1Faldon2 As Integer
+			Dim frac2Faldon2 As Integer
+			Dim fraccionDoubleFaldon2 As Double
+			For a = 1 To Len(fraccionFaldon2)
+				If Mid(fraccionFaldon2,a,1) = "/" Then
+					frac1Faldon2 = CInt(Left(fraccionFaldon2, a-1))
+					frac2Faldon2 = Cint(Right(fraccionFaldon2, Len(fraccionFaldon2)-a))
+					fraccionDoubleFaldon2 = frac1Faldon2 / frac2Faldon2
+				End If
+			Next
+			anguloRadFaldon2 = Atn(fraccionDoubleFaldon2)
+			anguloFaldon2 = anguloRadFaldon2*(180/3.141592)
+		End If
+		alphaFaldon2 = 90 - anguloFaldon2
+
+	ElseIf numFaldonPendiente = 3 Then
+			'--------------------------------------------------------------------
+		'--------------FALDON 1----------------------------------------------
+		'--------------------------------------------------------------------
+		Dim strBRepNameFaldon13 As String
+		strBrepNameFaldon13 = ""
+
+		MsgBox("Por favor, seleccione la cara donde se encuentra el faldon con distinta pendiente número 1")
+
+		Dim anyObjFilterFaldon13(0)
+		Dim oMySelectionFaldon13 As Object
+		Dim selMySelectionFaldon13 As Selection
+		Dim StatusFaldon13 As String
+		Dim oSelectedElementFaldon13 As SelectedElement
+		Dim oElementFaldon13 As Object
+		Dim strSelectionNameFaldon13 As String
+		Dim strSelectedElementNameFaldon13 As String
+		Dim strSelectionTypeNameFaldon13 As String
+		Dim strSelectedElementTypeNameFaldon13 As String
+		Dim strSelectionTypeFaldon13 As String
+		Dim iPopupFaldon13 As Integer
+
+		Set oMySelectionFaldon13 = partDocumentCubierta.Selection
+		Set selMySelectionFaldon13 = oMySelectionFaldon13
+		anyObjFilterFaldon13(0) = "AnyObject"
+
+		oMySelectionFaldon13.Clear
+
+		StatusFaldon13 = oMySelectionFaldon13.SelectElement3(anyObjFilterFaldon13, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementFaldon13 = oMySelectionFaldon13.Item(1)
+		Set oElementFaldon13 = oMySelectionFaldon13.Item(1).Value
+
+		strSelectionNameFaldon13 = oMySelectionFaldon13.Item(1).Name
+		strSelectionTypeFaldon13 = oMySelectionFaldon13.Item(1).Type
+		strSelectionTypeNameFaldon13 = TypeName(oMySelectionFaldon13.Item(1))
+		strSelectedElementNameFaldon13 = oElementFaldon13.Name
+		strSelectedElementTypeNameFaldon13 = TypeName(oElementFaldon13)
+
+		' iPopupFaldon = MsgBox( _
+		' "Selection.Name = " + strSelectionNameFaldon + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeFaldon + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameFaldon + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameFaldon + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameFaldon, _
+		' vbOKCancel, "VB Type Tester")
+
+		Dim referenceFaceFaldon13 As Reference
+
+		strBRepNameFaldon13 = Replace(strSelectedElementNameFaldon13,"Selection_","")
+		'strBRepName = Replace(strBRepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameFaldon13 = Replace(strBRepNameFaldon13,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+
+		Dim anguloFaldon13 As Double
+		Dim anguloRadFaldon13 As Double
+		Dim alphaFaldon13 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloFaldon13 As Integer
+		tipoAnguloFaldon13 = 1
+		tipoAnguloFaldon13 = InputBox("¿Cómo va a intrducir la pendiente del faldón nº 1? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente del faldón nº 1", tipoAnguloFaldon13)
+
+		If tipoAnguloFaldon13 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloFaldon13 = 45
+			anguloFaldon13 = InputBox("Por favor introduzca el ángulo del faldón nº 1 en grados, con respecto a la horizontal.","Pendiente del faldón nº 1", anguloFaldon13)
+		ElseIf tipoAnguloFaldon13 = 2 Then
+			Dim porcentajeFaldon13 As Double
+			porcentajeFaldon13 = 100
+			porcentajeFaldon13 = InputBox("Por favor introduzca la pendiente del faldón nº 1 en porcentaje, sin incluir el simbolo %.","Pendiente del faldón nº 1", porcentajeFaldon13)
+			anguloRadFaldon13 = Atn(porcentajeFaldon13/100)
+			anguloFaldon13 = anguloRadFaldon13*(180/3.141592)
+		ElseIf tipoAnguloFaldon13 = 3 Then
+			Dim fraccionFaldon13 As String
+			fraccionFaldon13 = "2/3"
+			fraccionFaldon13 = InputBox("Por favor introduzca la fracción de la pendiente del faldón nº 1, en el formato X/Y ","Pendiente del faldón nº 1", fraccionFaldon13)
+			Dim frac1Faldon13 As Integer
+			Dim frac2Faldon13 As Integer
+			Dim fraccionDoubleFaldon13 As Double
+			For a = 1 To Len(fraccionFaldon13)
+				If Mid(fraccionFaldon13,a,1) = "/" Then
+					frac1Faldon13 = CInt(Left(fraccionFaldon13, a-1))
+					frac2Faldon13 = Cint(Right(fraccionFaldon13, Len(fraccionFaldon13)-a))
+					fraccionDoubleFaldon13 = frac1Faldon13 / frac2Faldon13
+				End If
+			Next
+			anguloRadFaldon13 = Atn(fraccionDoubleFaldon13)
+			anguloFaldon13 = anguloRadFaldon13*(180/3.141592)
+		End If
+		alphaFaldon13 = 90 - anguloFaldon13
+
+		'--------------------------------------------------------------------------------------
+		'---------------FALDON 2---------------------------------------------------------------
+		'--------------------------------------------------------------------------------------
+		Dim strBRepNameFaldon23 As String
+		strBrepNameFaldon23 = ""
+
+		MsgBox("Por favor, seleccione la cara donde se encuentra el faldon con distinta pendiente número 2")
+
+		Dim anyObjFilterFaldon23(0)
+		Dim oMySelectionFaldon23 As Object
+		Dim selMySelectionFaldon23 As Selection
+		Dim StatusFaldon23 As String
+		Dim oSelectedElementFaldon23 As SelectedElement
+		Dim oElementFaldon23 As Object
+		Dim strSelectionNameFaldon23 As String
+		Dim strSelectedElementNameFaldon23 As String
+		Dim strSelectionTypeNameFaldon23 As String
+		Dim strSelectedElementTypeNameFaldon23 As String
+		Dim strSelectionTypeFaldon23 As String
+		Dim iPopupFaldon23 As Integer
+
+		Set oMySelectionFaldon23 = partDocumentCubierta.Selection
+		Set selMySelectionFaldon23 = oMySelectionFaldon23
+		anyObjFilterFaldon23(0) = "AnyObject"
+
+		oMySelectionFaldon23.Clear
+
+		StatusFaldon23 = oMySelectionFaldon23.SelectElement3(anyObjFilterFaldon23, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementFaldon23 = oMySelectionFaldon23.Item(1)
+		Set oElementFaldon23 = oMySelectionFaldon23.Item(1).Value
+
+		strSelectionNameFaldon23 = oMySelectionFaldon23.Item(1).Name
+		strSelectionTypeFaldon23 = oMySelectionFaldon23.Item(1).Type
+		strSelectionTypeNameFaldon23 = TypeName(oMySelectionFaldon23.Item(1))
+		strSelectedElementNameFaldon23 = oElementFaldon23.Name
+		strSelectedElementTypeNameFaldon23 = TypeName(oElementFaldon23)
+
+		' iPopupFaldon = MsgBox( _
+		' "Selection.Name = " + strSelectionNameFaldon + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeFaldon + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameFaldon + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameFaldon + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameFaldon, _
+		' vbOKCancel, "VB Type Tester")
+
+		Dim referenceFaceFaldon23 As Reference
+
+		strBRepNameFaldon23 = Replace(strSelectedElementNameFaldon23,"Selection_","")
+		'strBRepName = Replace(strBRepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameFaldon23 = Replace(strBRepNameFaldon23,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+
+		Dim anguloFaldon23 As Double
+		Dim anguloRadFaldon23 As Double
+		Dim alphaFaldon23 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloFaldon23 As Integer
+		tipoAnguloFaldon23 = 1
+		tipoAnguloFaldon23 = InputBox("¿Cómo va a intrducir la pendiente del faldón nº 2? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente del faldón nº 2", tipoAnguloFaldon23)
+
+		If tipoAnguloFaldon23 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloFaldon23 = 45
+			anguloFaldon23 = InputBox("Por favor introduzca el ángulo del faldón nº 2 en grados, con respecto a la horizontal.","Pendiente del faldón nº 2", anguloFaldon23)
+		ElseIf tipoAnguloFaldon23 = 2 Then
+			Dim porcentajeFaldon23 As Double
+			porcentajeFaldon23 = 100
+			porcentajeFaldon23 = InputBox("Por favor introduzca la pendiente del faldón nº 2 en porcentaje, sin incluir el simbolo %.","Pendiente del faldón nº 2", porcentajeFaldon23)
+			anguloRadFaldon23 = Atn(porcentajeFaldon23/100) 
+			anguloFaldon23 = anguloRadFaldon23*(180/3.141592)
+		ElseIf tipoAnguloFaldon23 = 3 Then
+			Dim fraccionFaldon23 As String
+			fraccionFaldon23 = "2/3"
+			fraccionFaldon23 = InputBox("Por favor introduzca la fracción de la pendiente del faldón nº 2, en el formato X/Y ","Pendiente del faldón nº 2", fraccionFaldon23)
+			Dim frac1Faldon23 As Integer
+			Dim frac2Faldon23 As Integer
+			Dim fraccionDoubleFaldon23 As Double
+			For a = 1 To Len(fraccionFaldon23)
+				If Mid(fraccionFaldon23,a,1) = "/" Then
+					frac1Faldon23 = CInt(Left(fraccionFaldon23, a-1))
+					frac2Faldon23 = Cint(Right(fraccionFaldon23, Len(fraccionFaldon23)-a))
+					fraccionDoubleFaldon23 = frac1Faldon23 / frac2Faldon23
+				End If
+			Next
+			anguloRadFaldon23 = Atn(fraccionDoubleFaldon23)
+			anguloFaldon23 = anguloRadFaldon23*(180/3.141592)
+		End If
+		alphaFaldon23 = 90 - anguloFaldon23
+
+		'--------------------------------------------------------------------------------------
+		'---------------FALDON 3---------------------------------------------------------------
+		'--------------------------------------------------------------------------------------
+		Dim strBRepNameFaldon3 As String
+		strBrepNameFaldon3 = ""
+
+		MsgBox("Por favor, seleccione la cara donde se encuentra el faldon con distinta pendiente número 3")
+
+		Dim anyObjFilterFaldon3(0)
+		Dim oMySelectionFaldon3 As Object
+		Dim selMySelectionFaldon3 As Selection
+		Dim StatusFaldon3 As String
+		Dim oSelectedElementFaldon3 As SelectedElement
+		Dim oElementFaldon3 As Object
+		Dim strSelectionNameFaldon3 As String
+		Dim strSelectedElementNameFaldon3 As String
+		Dim strSelectionTypeNameFaldon3 As String
+		Dim strSelectedElementTypeNameFaldon3 As String
+		Dim strSelectionTypeFaldon3 As String
+		Dim iPopupFaldon3 As Integer
+
+		Set oMySelectionFaldon3 = partDocumentCubierta.Selection
+		Set selMySelectionFaldon3 = oMySelectionFaldon3
+		anyObjFilterFaldon3(0) = "AnyObject"
+
+		oMySelectionFaldon3.Clear
+
+		StatusFaldon3 = oMySelectionFaldon3.SelectElement3(anyObjFilterFaldon3, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementFaldon3 = oMySelectionFaldon3.Item(1)
+		Set oElementFaldon3 = oMySelectionFaldon3.Item(1).Value
+
+		strSelectionNameFaldon3 = oMySelectionFaldon3.Item(1).Name
+		strSelectionTypeFaldon3 = oMySelectionFaldon3.Item(1).Type
+		strSelectionTypeNameFaldon3 = TypeName(oMySelectionFaldon3.Item(1))
+		strSelectedElementNameFaldon3 = oElementFaldon3.Name
+		strSelectedElementTypeNameFaldon3 = TypeName(oElementFaldon3)
+
+		' iPopupFaldon = MsgBox( _
+		' "Selection.Name = " + strSelectionNameFaldon + vbCrLf + _
+		' "Selection.Type = " + strSelectionTypeFaldon + vbCrLf + _
+		' "Selection TypeName = " + strSelectionTypeNameFaldon + vbCrLf + _
+		' "SelectedElement.Name = " + strSelectedElementNameFaldon + vbCrLf + _
+		' "SelectedElement TypeName = " + strSelectedElementTypeNameFaldon, _
+		' vbOKCancel, "VB Type Tester")
+
+		Dim referenceFaceFaldon3 As Reference
+
+		strBRepNameFaldon3 = Replace(strSelectedElementNameFaldon3,"Selection_","")
+		'strBRepName = Replace(strBRepName,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameFaldon3 = Replace(strBRepNameFaldon3,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+
+		Dim anguloFaldon3 As Double
+		Dim anguloRadFaldon3 As Double
+		Dim alphaFaldon3 As Double
+
+		'Se pregunta si se quiere el angulo en grados (1), porcentaje (2), o fraccion (3)
+		Dim tipoAnguloFaldon3 As Integer
+		tipoAnguloFaldon3 = 1
+		tipoAnguloFaldon3 = InputBox("¿Cómo va a intrducir la pendiente del faldón nº 3? " & vbCrLf & "1 - Angulo" & vbCrLf & "2 - Porcentaje" & vbCrLf & "3 - Fraccion","Pendiente del faldón nº 3", tipoAnguloFaldon3)
+
+		If tipoAnguloFaldon3 = 1 Then
+			'Se pregunta que angulo quiere en la cubierta, para poder sacar la altura necesaria del pad.Se toma el complementario de ese angulo para el draft
+			anguloFaldon3 = 45
+			anguloFaldon3 = InputBox("Por favor introduzca el ángulo del faldón nº 3 en grados, con respecto a la horizontal.","Pendiente del faldón nº 3", anguloFaldon3)
+		ElseIf tipoAnguloFaldon3 = 2 Then
+			Dim porcentajeFaldon3 As Double
+			porcentajeFaldon3 = 100
+			porcentajeFaldon3 = InputBox("Por favor introduzca la pendiente del faldón nº 3 en porcentaje, sin incluir el simbolo %.","Pendiente del faldón nº 3", porcentajeFaldon3)
+			anguloRadFaldon3 = Atn(porcentajeFaldon3/100)
+			anguloFaldon3 = anguloRadFaldon3*(180/3.141592)
+		ElseIf tipoAnguloFaldon3 = 3 Then
+			Dim fraccionFaldon3 As String
+			fraccionFaldon3 = "2/3"
+			fraccionFaldon3 = InputBox("Por favor introduzca la fracción de la pendiente del faldón nº 3, en el formato X/Y ","Pendiente del faldón nº 3", fraccionFaldon3)
+			Dim frac1Faldon3 As Integer
+			Dim frac2Faldon3 As Integer
+			Dim fraccionDoubleFaldon3 As Double
+			For a = 1 To Len(fraccionFaldon3)
+				If Mid(fraccionFaldon3,a,1) = "/" Then
+					frac1Faldon3 = CInt(Left(fraccionFaldon3, a-1))
+					frac2Faldon3 = Cint(Right(fraccionFaldon3, Len(fraccionFaldon3)-a))
+					fraccionDoubleFaldon3 = frac1Faldon3 / frac2Faldon3
+				End If
+			Next
+			anguloRadFaldon3 = Atn(fraccionDoubleFaldon3)
+			anguloFaldon3 = anguloRadFaldon3*(180/3.141592)
+		End If
+		alphaFaldon3 = 90 - anguloFaldon3
+	End If
+
+
+	'------------SELECCIÓN DE VERTICE--------------------------
+	If verticeCota = True Then
+		
+		'obtenemos varias caracteristicas del elemento que seleccionamos
+		'Nos fijamos en selectedElement.Name, porque con eso podremos crear una referencia con CreateReferenceFromName
+		MsgBox("Por favor, seleccione la arista donde se encuentra el punto a distinta cota")
+
+		Dim anyObjFilterVertice(0)
+		Dim oMySelectionVertice As Object
+		Dim selMySelectionVertice As Selection
+		Dim StatusVertice As String
+		Dim oSelectedElementVertice As SelectedElement
+		Dim oElementVertice As Object
+		Dim strSelectionNameVertice As String
+		Dim strSelectedElementNameVertice As String
+		Dim strSelectionTypeNameVertice As String
+		Dim strSelectedElementTypeNameVertice As String
+		Dim strSelectionTypeVertice As String
+		Dim iPopupVertice As Integer
+
+		Set oMySelectionVertice = partDocumentCubierta.Selection
+		Set selMySelectionVertice = oMySelectionVertice
+		anyObjFilterVertice(0) = "AnyObject"
+
+		oMySelectionVertice.Clear
+
+		StatusVertice = oMySelectionVertice.SelectElement3(anyObjFilterVertice, "Select an Element", True, _
+		CATMultiSelTriggWhenSelPerf, False)
+
+		Set oSelectedElementVertice = oMySelectionVertice.Item(1)
+		Set oElementVertice = oMySelectionVertice.Item(1).Value
+
+		strSelectionNameVertice = oMySelectionVertice.Item(1).Name
+		strSelectionTypeVertice = oMySelectionVertice.Item(1).Type
+		strSelectionTypeNameVertice = TypeName(oMySelectionVertice.Item(1))
+		strSelectedElementNameVertice = oElementVertice.Name
+		strSelectedElementTypeNameVertice = TypeName(oElementVertice)
+
+		'iPopupVertice = MsgBox( _
+		 '"Selection.Name = " + strSelectionNameVertice + vbCrLf + _
+		 '"Selection.Type = " + strSelectionTypeVertice + vbCrLf + _
+		 '"Selection TypeName = " + strSelectionTypeNameVertice + vbCrLf + _
+		 '"SelectedElement.Name = " + strSelectedElementNameVertice + vbCrLf + _
+		 '"SelectedElement TypeName = " + strSelectedElementTypeNameVertice, _
+		 'vbOKCancel, "VB Type Tester")
+
+		Dim referenceVertice1 As Reference
+		Dim strBrepNameVertice
+		Dim strPointName As String
+
+		strBRepNameVertice = Replace(strSelectedElementNameVertice,"Selection_","")
+		'strBRepNameVertice = Replace(strBRepNameVertice,";Pad.1_ResultOUT;Z0;G3173)","")		'CATIAv5r19
+		strBRepNameVertice = Replace(strBRepNameVertice,";Pad.1_ResultOUT;Z0;G4074)","")		'CATIAv5r21
+		strPointName = Replace(strBRepNameVertice, "REdge:(Edge:(Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";","")
+		strPointName = Replace(strPointName, ")));None:();Cf11:());Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta& ";", " ")
+		strPointName = Replace(strPointName, ")));None:();Cf11:());None:(Limits1:();Limits2:());Cf11:())", "")
+		strPointName = Left(strPointName, 2)
+		'Por si el numero está entre 1 y 9
+		If Right(strPointName, 1) = Chr(32) Then
+			strPointName = Left(strPointName, 1)
+		End If
+
+		Dim intPointNumber As Integer
+		intPointNumber = CInt(strPointName)
+
+
+		'Se pide al usuario la diferencia de cota del punto elegido
+		Dim difCotaAux As Double
+		Dim difCota As Double
+		difCotaAux = 1000
+		difCotaAux = InputBox("Por favor introduzca la diferencia de cota del vertice seleccionado, en milimetros","Diferencia de cota", difCotaAux)
+		difCota = Abs(difCotaAux)
+
+		Dim radio As Double
+		radio = difCota * (1/Tan(angulo * 3.141592 / 180))
+
+		'Copiar el sketch antes de ninguna modificacion en caso de que la diferencia de cota sea positiva
+		If difCotaAux > 0 Then
+			Dim selection2 As Selection
+			Set selection2 = partDocumentCubierta.Selection
+
+			selection2.Clear
+			selection2.Add sketchCubierta
+			selection2.Copy
+		End If
+
+		'Modificación para el caso de que haya algun alero cuvo.
+		'Normalmente la primera linea es el numero del vertice -1, pero los aleros curvos añaden un punto mas,
+		'asi que la primera linea es Nvertice -1 + nº aleros curvos.
+
+		Dim numAleroCurvo As Integer
+		numAleroCurvo = 0
+
+		For a = 1 To intPointNumber
+			Set genericObject = geoList.Item(a)
+			If TypeName(genericObject) = "Circle2D" Then
+				numAleroCurvo = numAleroCurvo + 1
+			End If
+		Next
+		intPointNumber = intPointNumber + numAleroCurvo
+		strPointName = CStr(intPointNumber)
+
+		'-----------------MODIFICAR SKETCH-------------------
+		Dim factory2DCubierta As Factory2D
+		Set factory2DCubierta = sketchCubierta.OpenEdition()
+
+		Dim geometricElementsCubierta As GeometricElements
+		Set geometricElementsCubierta = sketchCubierta.GeometricElements
+
+		'Creamos el set de constraints
+		Dim constraintsCubierta As Constraints
+		Set constraintsCubierta = sketchCubierta.Constraints
+		'Desactivamos todas las constraints para poder mover libremente los elementos deseados
+		Dim constraintCubierta As Constraint
+
+		For i = 1 To constraintsCubierta.Count
+			Set constraintCubierta = constraintsCubierta.Item(i)
+			constraintCubierta.Deactivate
+		Next
+
+		'Nombres que se van a usar
+		'point2D1 = vertice fuera de cota
+		'point2D2 = centro del circulo
+		'point2D3 = vertice anterior al fuera de cota
+		'point2D4 = vertice siguiente al fuiera de cota
+		'line2D1 = linea que acaba en el veretice fuera de cota
+		'line2D2 = linea que empieza en el vertice fuera de cota
+
+		'Asignamos nombres a los pountos que se van a usar
+		Dim point2D1 As GeometricElement
+		Set point2D1 = geometricElementsCubierta.Item("Point." + strPointName)
+
+		Dim coordsPoint2D1(1) As Double
+		point2D1.GetCoordinates coordsPoint2D1
+
+		Dim point2D2 As GeometricElement
+		Set point2D2 = factory2DCubierta.CreatePoint(10,10)
+
+		point2D2.Construction = True
+
+		Dim point2D3 As GeometricElement
+		Set point2D3 = geometricElementsCubierta.Item("Point." + CStr(intPointNumber - 1))
+
+		Dim point2D4 As GeometricElement
+		Set point2D4 = geometricElementsCubierta.Item("Point." + CStr(intPointNumber + 1))
+
+		'Igual pero con las lineas
+		Dim line2D1 As GeometricElement
+		Set line2D1 = geometricElementsCubierta.Item("Line." + CStr(intPointNumber - 1 - 2 * numAleroCurvo))
+
+		Dim line2D2 As GeometricElement
+		Set line2D2 = geometricElementsCubierta.Item("Line." + CStr(intPointNumber - 2 * numAleroCurvo))
+
+		'Crear un circulo en un punto arbitrario, con un radio arbitrario
+		Dim circle2D1 As Circle2D
+		Set circle2D1 = factory2DCubierta.CreateClosedCircle(10, 10, 20)
+		circle2D1.CenterPoint = point2D2
+		circle2D1.Construction = True
+
+		'Crear las referencias de todos los elementos que se van a usar
+		Dim refCircle1 As Reference
+		Set refCircle1 = partCubierta.CreateReferenceFromObject(circle2D1)
+
+		Dim refPoint1 As Reference
+		Set refPoint1 = partCubierta.CreateReferenceFromObject(point2D1)
+
+		Dim refPoint2 As Reference
+		Set refPoint2 = partCubierta.CreateReferenceFromObject(point2D2)
+
+		Dim refPoint3 As Reference
+		Set refPoint3 = partCubierta.CreateReferenceFromObject(point2D3)
+
+		Dim refPoint4 As Reference
+		Set refPoint4 = partCubierta.CreateReferenceFromObject(point2D4)
+
+		Dim refLine1 As Reference
+		Set refLine1 = partCubierta.CreateReferenceFromObject(line2D1)
+
+		Dim refLine2 As Reference
+		Set refLine2 = partCubierta.CreateReferenceFromObject(line2D2)
+
+		'Crear constraints para mover los elementos a donde queremos
+		'Darle radio al circulo
+		Dim constRadius As Constraint
+		Set constRadius = constraintsCubierta.AddMonoEltCst(catCstTypeRadius, refCircle1)
+
+		Dim lengthRadius As Dimension
+		Set lengthRadius = constRadius.Dimension
+
+		lengthRadius.Value = radio
+
+		'Mover el circulo al vertice fuera de cota
+		Dim constConcentricity As Constraint
+		Set constConcentricity = constraintsCubierta.AddBiEltCst(catCstTypeConcentricity, refPoint1, refCircle1)
+		'Fijar el circulo en su nueva posicion
+		Dim constFixCircle As Constraint
+		Set constFixCircle = constraintsCubierta.AddMonoEltCst(catCstTypeReference, refCircle1)
+		'Desactivar la concentricidad para que el punto pueda moverse
+		Dim myConstName As String
+		myConstName = constConcentricity.Name
+		constraintsCubierta.Remove(myConstName)
+
+		constConcentricity.Deactivate
+
+		'Fijar los puntos anterior y posterior al vertice fuera de cota
+		Dim constFixPoint3 As Constraint
+		Set constFixPoint3 = constraintsCubierta.AddMonoEltCst(catCstTypeReference, refPoint3)
+
+		Dim constFixPoint4 As Constraint
+		Set constFixPoint4 = constraintsCubierta.AddMonoEltCst(catCstTypeReference, refPoint4)
+
+		'Mover un poco las lineas para que al haver las tangencias vayan por donde deben
+		Dim axis2DSketchCubierta As GeometricElement
+		Set axis2DSketchCubierta = geometricElementsCubierta.Item("AbsoluteAxis")
+
+		Dim axisH As CATBaseDispatch
+		Set axisH = axis2DSketchCubierta.GetItem("HDirection")
+
+		Dim refAxisH As Reference
+		Set refAxisH = partCubierta.CreateReferenceFromObject(axisH)
+
+		Dim constAngleLine1 As Constraint
+		Set constAngleLine1 = constraintsCubierta.AddBiEltCst(catCstTypeAngle, refLine1, refAxisH)
+
+		constAngleLine1.Mode = catCstModeDrivingDimension
+
+		constAngleLine1.AngleSector = catCstAngleSector3
+
+		Dim AngleLine1 As Dimension
+		Set AngleLine1 = constAngleLine1.Dimension
+
+		Dim constAngleLine2 As Constraint
+		Set constAngleLine2 = constraintsCubierta.AddBiEltCst(catCstTypeAngle, refLine2, refAxisH)
+
+		constAngleLine2.Mode = catCstModeDrivingDimension
+
+		constAngleLine2.AngleSector = catCstAngleSector3
+
+		Dim AngleLine2 As Dimension
+		Set AngleLine2 = constAngleLine2.Dimension
+
+		If difCotaAux > 0 Then
+			AngleLine1.Value = AngleLine1.Value - 5
+			AngleLine2.Value = AngleLine2.Value + 5
+		ElseIf difCotaAux < 0 Then
+			AngleLine1.Value = AngleLine1.Value + 5
+			AngleLine2.Value = AngleLine2.Value - 5
+		End If
+
+		constAngleLine1.Deactivate
+		constAngleLine2.Deactivate
+
+		'Hacer las lineas tangentes al circulo
+		Dim constTangLine1 As Constraint
+		Set constTangLine1 = constraintsCubierta.AddBiEltCst(catCstTypeTangency, refLine1, refCircle1)
+
+		Dim constTangLine2 As Constraint
+		Set constTangLine2 = constraintsCubierta.AddBiEltCst(catCstTypeTangency, refLine2, refCircle1)
+
+		sketchCubierta.CloseEdition
+
+		partCubierta.Update
+	End If
+
+	'----------------INICIO DRAFT----------------
+	'Se crea una referencia vacía para asignarla a los campos que no se vayan a usar del desmoldeo, y la referencia de la cara neutral (la que se va a mantener inalterada)
+	Dim referenceEmpty As Reference
+	Set referenceEmpty = partCubierta.CreateReferenceFromName("")
+	Dim reference3 As Reference
+	Set reference3 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padCubiertaName&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padCubierta)
+
+	'Se realiza un desmoldeo "vacío", es decir, se selecciona la cara neutral pero ninguna cara a desmoldear, ya que esas caras se iran añadiendo posteriormente
+	Dim draftCubierta As Draft
+	Set draftCubierta = shapeFactoryCubierta.AddNewDraft(referenceEmpty, reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alpha, catNoneDraftMultiselectionMode)
+
+	Dim draftDomainsCubierta As DraftDomains
+	Set draftDomainsCubierta = draftCubierta.DraftDomains
+
+	Dim draftDomainCubierta As DraftDomain
+	Set draftDomainCubierta = draftDomainsCubierta.Item(1)
+
+	'Se crea una referencia desde la que tomar la dirección del desmoldeo, ya que la predeterminada no es la que nos interesa
+	Dim reference4 As Reference
+	Set reference4 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padCubiertaName&";2);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padCubierta)
+	'Se asigna la dirección del desmoldeo
+	draftDomainCubierta.SetPullingDirection 0.000000, 0.000000, 1.000000
+	draftDomainCubierta.PullingDirectionElement = reference4
+
+	'Creamos un contador y un vector de referencias vacío de un tamaño arbitrario para guardar las caras que se van a añadir al desmoldeo
+	Dim I As Integer
+	I = 1
+	Dim myReference(25) As Reference
+
+	'Se establece que en caso de error debe continuar.
+	On Error Resume Next
+
+	'Se asigna la primera cara del pad a la primera referencia del vector, y se añade esa referencia a las caras para desmoldear
+	Set myReference(I) = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padCubiertaName&";0:(Brp:(Sketch.1;" & I & ")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padCubierta)
+	draftDomainCubierta.AddFaceToDraft myReference(I)
+	'Se actualiza la pieza en cada cara porque si se dejan todas para el final da error
+	partCubierta.Update
+
+	'Este bucle es un "failsafe". Si la primera cara da error, se desactiva.
+	If Err.Number <> 0 Then
+		'MsgBox "Error number " & Err.Number & ", " & Err.Description & ", has occurred"
+		Err.Clear
+		Set myReference(I) = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padCubiertaName&";0:(Brp:(Sketch.1;" & I & ")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", draftCubierta)
+		draftDomainCubierta.RemoveFaceToDraft myReference(I)
+		partCubierta.update
+	End If
+
+	'Se crea un vector de desmoldeos, ya que añadir todas las caras a un solo desmoldeo da error
+	'Se asigna el primer desmoldeo del vector con el que se ha realizado previamente
+	Dim myDraft(25) As Draft
+	Set myDraft(1) = draftCubierta
+	Dim myDraftDomains(25) As DraftDomains
+	Dim myDraftDomain(25) As DraftDomain
+	Dim K As Integer
+	Dim Iaux As Integer
+	Dim objSel As Selection
+	Dim strReferenceBRepName As String
+
+	Dim draftRef As Draft
+
+	I = I + 1
+
+	Dim saltarCara As integer
+	Dim contadorCarasSaltadas As Integer
+	Dim caraError(25) As integer
+	Dim contAux As integer
+
+	contadorCarasSaltadas = 0
+	saltarCara = 0
+	contAux = 1
+
+	'Desde la segunda cara hasta la ultima se repiten lo siguientes pasos
+	For I = 2 To nCaras
+		'Se crea el nombre de la refencia de la cara
+		strReferenceBRepName = "RSur:(Face:(Brp:("&padCubiertaName&";0:(Brp:(Sketch.1;" & I & ")));None:();Cf11:())"
+
+		'Si el nombre de la cara es el que ha elegdo el usuario, aumentar en uno el contador de saltar caras
+		If strReferenceBrepName = strBrepName Then
+			saltarCara = saltarCara + 1
+		End If
+
+		'Si el contador de saltar caras es cero o mas de 2, significa que no hay que saltar esa cara
+		'se trata el bucle como en el programa Cubierta_básica.CATScript pero con ligeras modificaciones
+		If saltarCara = 0 Or saltarCara >= 2 Then
+
+			'Se tiene en cuenta si se ha saltado alguna cara o no para asignar el draft de referencia
+			If saltarCara = 0 Then
+				Set draftRef = myDraft(I-1)
+			Else
+				Set draftRef = myDraft(I-2)
+			End If
+			'Se asigna la cara a una referencia, y se añade la referencia al draft que toca
+			Set myReference(I) = partCubierta.CreateReferenceFromBRepName(strReferenceBRepName & ";WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", draftRef)
+			myDraftDomain(I).AddFaceToDraft myReference(I)
+
+			'Se realiza el draft a la cara
+			If strReferenceBrepName = strBRepNameFaldon1 Then
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alphaFaldon1, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			ElseIf strReferenceBRepName = strBrepNameFaldon12 Then
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alphaFaldon12, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			ElseIf strReferenceBRepName = strBrepNameFaldon13 Then
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alphaFaldon13, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			ElseIf strReferenceBRepName = strBrepNameFaldon2 Then
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alphaFaldon2, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			ElseIf strReferenceBRepName = strBrepNameFaldon23 Then
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alphaFaldon23, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			ElseIf strReferenceBRepName = strBrepNameFaldon3 Then
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alphaFaldon3, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			Else
+				Set myDraft(I) = shapeFactoryCubierta.AddNewDraft(myReference(I), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alpha, catNoneDraftMultiselectionMode)
+				Set myDraftDomains(I) = myDraft(I).DraftDomains
+				Set myDraftDomain(I) = myDraftDomains(I).Item(1)
+			End If
+
+
+			'Se añade la dirección del draft y se actualiza la pieza
+			myDraftDomain(I).SetPullingDirection 0.000000, 0.000000, 1.000000
+			myDraftDomain(I).PullingDirectionElement = reference4
+			partCubierta.Update
+
+			'Si el tipo de error es distinto de los dos codigos de a continuación, no es necesario hacer nada
+			'(Err.NUmber = 0 es cuando no ha dado ningún error)
+			If Err.Number <>  0 And Err.Number <> -2147418113 Then
+
+				'Si es alguno de los dos codigos siguientes, se guarda el numero de cara para procesarla despues
+				If Err.Number = -2147467259 Or Err.number = -13 Then
+					'Guardar la I para procesarla despues
+					caraError(contAux) = I
+					'Se aumenta en uno el valor del contador auxiliar por cada cara que haya que reprocesar
+					contAux = contAux + 1
+				End If
+
+				'Si no era ninguno de los dos codigos anteriores, se borra el draft que se ha hecho
+				Set objSel = CATIA.ActiveDocument.Selection
+				objSel.Clear
+				objSel.Add myDraft(I)
+				objSel.Delete
+				Err.Clear
+				partCubierta.Update
+			End If
+
+		End If
+
+		'Si saltar cara es uno, significa que estamos en la cara que el usuario ha elegido, por lo que aumentan los contadores necesarios y se pasa a la siguiente cara
+		If saltarCara = 1 Then
+			saltarCara = saltarCara + 1
+			contadorCarasSaltadas = contadorCarasSaltadas + 1
+			partCubierta.Update
+		End If
+
+		partCubierta.Update
+		'Se guara el ultimo valor que haya tenido I para la siguiente parte del programa
+		Iaux = I
+	Next
+
+	'Se reprocesan las caras correspondientes
+	For K = 1 To contAux-1
+
+		'Se realizan los mismos pasos que en el bucle anterior
+		Set draftRef = myDraft(Iaux+K-1)
+
+		strReferenceBRepName = "RSur:(Face:(Brp:("&padCubiertaName&";0:(Brp:(Sketch.1;" & caraError(K) & ")));None:();Cf11:())"
+		Set myReference(Iaux+K) = partCubierta.CreateReferenceFromBRepName(strReferenceBRepName & ";WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", draftRef)
+		myDraftDomain(Iaux+K).AddFaceToDraft myReference(Iaux+K)
+		Set myDraft(Iaux+K) = shapeFactoryCubierta.AddNewDraft(myReference(Iaux+K), reference3, catNoneDraftNeutralPropagationMode, referenceEmpty, 0.000000, 0.000000, 1.000000, catStandardDraftMode, alpha, catNoneDraftMultiselectionMode)
+		Set myDraftDomains(Iaux+K) = myDraft(Iaux+K).DraftDomains
+		Set myDraftDomain(Iaux+K) = myDraftDomains(Iaux+K).Item(1)
+		myDraftDomain(Iaux+K).SetPullingDirection 0.000000, 0.000000, 1.000000
+		myDraftDomain(Iaux+K).PullingDirectionElement = reference4
+		partCubierta.Update
+
+		'Si da algun fallo, se elimina el draft ya que los fallos que puede dar no son fallos sino avisos.
+		If Err.Number <>  0 And Err.Number <> -2147418113 And Err.Number <> -2147467259 Then
+
+			Set objSel = CATIA.ActiveDocument.Selection
+			objSel.Clear
+			objSel.Add myDraft(I)
+			objSel.Delete
+			Err.Clear
+			partCubierta.Update
+		End If
+
+	Next
+
+	On Error GoTo 0
+
+	'Aqui hay que hacer un bucle y borrar solo mientras de error. 
+ 
+	Dim shapes1 As Shapes
+	Set shapes1 = bodyCubierta.Shapes
+	Dim selection1 As Selection
+	Set selection1 = partDocumentCubierta.Selection
+
+	'Eliminar los drafts innecesarios
+	On Error Resume Next
+	For a = 1 To shapes1.Count
+		Err.Clear
+		partCubierta.Update
+		' MsgBox "Error number " & Err.Number & ", " & Err.Description & ", has occurred"
+		If Err.Number <> 0 Then
+			selection1.Clear
+			Dim draftToDelete As Shape
+			Set draftToDelete = shapes1.Item(shapes1.Count)
+			selection1.Add draftToDelete
+			selection1.Delete
+		ElseIf Err.Number = 0 Then
+			Exit For
+		End If
+	Next
+
+	' selection1.Clear
+	' Set draftToDelete = shapes1.Item(shapes1.Count)
+	' selection1.Add draftToDelete
+	' selection1.Delete
+
+	If verticeCota = True Then
+
+		If difCotaAux < 0 Then
+			'Cogemos el ultimo draft para sacar luego los puntos con los que haremos la polilinea
+			Dim myShapes As Shapes
+			Set myShapes = bodyCubierta.Shapes
+
+			Dim lastDraft As Shape
+			Set lastDraft = myShapes.Item(myShapes.Count)
+
+			'Sacar las referencias necesarias (puntos 1, 3, y 4 de antes)
+			Dim refPoint3D3 As Reference
+			Set refPoint3D3 = partCubierta.CreateReferenceFromBRepName("FVertex:(Vertex:(Neighbours:(Face:(Brp:(Pad.1;1);None:();Cf11:())" +_
+			";Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";"+ CStr(intPointNumber-2-numAleroCurvo) +")));None:();Cf11:());" +_
+			"Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";"+ CStr(intPointNumber-1-numAleroCurvo) +")));None:();Cf11:()));" +_
+			"Cf11:());WithPermanentBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", lastDraft)
+
+			Dim refPoint3D1 As Reference
+			Set refPoint3D1 = partCubierta.CreateReferenceFromBRepName("FVertex:(Vertex:(Neighbours:(Face:(Brp:(Pad.1;1);None:();Cf11:())" +_
+			";Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";"+ CStr(intPointNumber-1-numAleroCurvo) +")));None:();Cf11:());" +_
+			"Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";"+ CStr(intPointNumber-numAleroCurvo) +")));None:();Cf11:()));" +_
+			"Cf11:());WithPermanentBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", lastDraft)
+
+			Dim refPoint3D4 As Reference
+			Set refPoint3D4 = partCubierta.CreateReferenceFromBRepName("FVertex:(Vertex:(Neighbours:(Face:(Brp:(Pad.1;1);None:();Cf11:())" +_
+			";Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";"+ CStr(intPointNumber-numAleroCurvo) +")));None:();Cf11:());" +_
+			"Face:(Brp:(Pad.1;0:(Brp:("&strSelectedElementNameSketchCubierta&";"+ CStr(intPointNumber+1-numAleroCurvo) +")));None:();Cf11:()));" +_
+			"Cf11:());WithPermanentBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", lastDraft)
+
+			'Crear plano, sketch, y punto
+			Dim hybridshapeFactoryCubierta As Factory
+			Set hybridshapeFactoryCubierta = partCubierta.HybridShapeFactory
+
+			Dim originElementsCubierta As OriginElements
+			Set originElementsCubierta = partCubierta.OriginElements
+
+			Dim planeXY As AnyObject
+			Set planeXY = originElementsCubierta.PlaneXY
+
+			Dim refPlaneXY As Reference
+			Set refPlaneXY = partCubierta.CreateReferenceFromObject(planeXY)
+
+			Dim planeOffset As HybridShapePlaneOffset
+			Set planeOffset = hybridshapeFactoryCubierta.AddNewPlaneOffset(refPlaneXY, difCota, True)
+
+			bodyCubierta.InsertHybridShape planeOffset
+			partCubierta.InWorkObject = planeOffset
+
+			Dim hybridShapesCubierta As HybridShapes
+			Set hybridShapesCubierta = bodyCubierta.HybridShapes
+
+            Dim planeOffsetName As String
+	        planeOffsetName = planeOffset.Name
+
+			Dim refPlaneOffset As HybridShape
+			Set refPlaneOffset = hybridShapesCubierta.Item(planeOffsetName)
+
+			Dim sketchOffset As Sketch
+			Set sketchOffset = sketchesCubierta.Add(refPlaneOffset)
+
+			Dim factory2DCotaNegativa As Factory2D
+			Set factory2DCotaNegativa = sketchOffset.OpenEdition()
+
+			Dim point2DOffset As Point2D
+			Set point2DOffset = factory2DCotaNegativa.CreatePoint(coordsPoint2D1(0), coordsPoint2D1(1))
+
+			point2DOffset.Construction = False
+
+			sketchOffset.CloseEdition
+
+			partCubierta.UpdateObject(sketchOffset)
+
+			'Hacer una polilinea con los puntos necesarios por cada lado
+			partCubierta.InWorkObject = sketchOffset
+
+			Dim refSketchOffset As Reference
+			Set refSketchOffset = partCubierta.CreateReferenceFromObject(sketchOffset)
+
+			Dim hybridShapePolyline1 As HybridShapePolyline
+			Set hybridShapePolyline1 = hybridshapeFactoryCubierta.AddNewPolyline()
+
+			hybridShapePolyline1.InsertElement refPoint3D3, 1
+			hybridShapePolyline1.InsertElement refpoint3D1, 2
+			hybridShapePolyline1.InsertElement refSketchOffset, 3
+			hybridShapePolyline1.Closure = True
+
+			bodyCubierta.InsertHybridShape hybridShapePolyline1
+
+			partCubierta.InWorkObject = hybridShapePolyline1
+
+			Dim hybridShapePolyline2 As HybridShapePolyline
+			Set hybridShapePolyline2 = hybridshapeFactoryCubierta.AddNewPolyline()
+
+			hybridShapePolyline2.InsertElement refPoint3D4, 1
+			hybridShapePolyline2.InsertElement refpoint3D1, 2
+			hybridShapePolyline2.InsertElement refSketchOffset, 3
+			hybridShapePolyline2.Closure = True
+
+			bodyCubierta.InsertHybridShape hybridShapePolyline2
+
+			partCubierta.InWorkObject = hybridShapePolyline2
+
+			Dim refPolyline1 As Reference
+			Set refPolyline1 = partCubierta.CreateReferenceFromObject(hybridShapePolyline1)
+
+			Dim refPolyline2 As Reference
+			Set refPolyline2 = partCubierta.CreateReferenceFromObject(hybridShapePolyline2)
+
+			Dim hybridShapeFill1 As HybridShapeFill
+			Set hybridShapeFill1 = hybridshapeFactoryCubierta.AddNewFill()
+			hybridShapeFill1.AddBound refPolyline1
+
+			hybridShapeFill1.Continuity = 0
+
+			bodyCubierta.InsertHybridShape hybridShapeFill1
+
+			partCubierta.InWorkObject = hybridShapeFill1
+
+			Dim hybridShapeFill2 As HybridShapeFill
+			Set hybridShapeFill2 = hybridshapeFactoryCubierta.AddNewFill()
+
+			hybridShapeFill2.AddBound refPolyline2
+
+			hybridShapeFill2.Continuity = 0
+
+			bodyCubierta.InsertHybridShape hybridShapeFill2
+
+			partCubierta.InWorkObject = hybridShapeFill2
+		End If
+
+		If difCotaAux > 0 Then
+			'Vamos a crear un body nuevo, pegar el sketch, hacer un pad, e intersectar los dos bodies
+			partCubierta.InWorkObject = bodyCubierta
+
+			Dim bodyCotaPos As Body
+			Set bodyCotaPos = bodiesCubierta.Add()
+			Set selectionBodyCotaPos = partDocumentCubierta.Selection
+			selectionBodyCotaPos.Clear
+			selectionBodyCotaPos.Add bodyCotaPos
+			selectionBodyCotaPos.Paste
+
+			partCubierta.InWorkObject = bodyCotaPos
+			Dim sketchesCotaPos As Sketches
+			Set sketchesCotaPos = bodyCotaPos.Sketches
+
+			Dim sketchBodyCotaPos As Sketch
+			Set sketchBodyCotaPos = sketchesCotaPos.Item(1)
+
+			Dim padCotaPos As Pad
+			Set padCotaPos = shapeFactoryCubierta.AddNewPad(sketchbodyCotaPos, height)
+
+			partCubierta.InWorkObject = bodyCubierta
+
+			Dim intersectCotaPos As Intersect
+			Set intersectCotaPos = shapeFactoryCubierta.AddNewIntersect(bodyCotaPos)
+		End If
+
+	partCubierta.Update
+	End If
+
+	'Se vuelve al estado normal, si hay error el programa parará
+	On Error GoTo 0
+
+	If resultPatioInterior = 1 Then
+		partCubierta.InWorkObject = bodyCubierta
+		If difCotaPatio1 < 0 Then
+			If verticeCota = True And difCotaAux > 0 Then
+			Dim padPatioCotaNegVert1 As Pad
+			Set padPatioCotaNegVert1 = shapeFactoryCubierta.AddNewPad(sketchbodyCotaPos, difCotaPatio1 * 1.1)
+			partCubierta.Update
+			Else
+			Dim padPatioCotaNeg1 As Pad
+			Set padPatioCotaNeg1 = shapeFactoryCubierta.AddNewPad(sketchCubierta, difCotaPatio1 * 1.1)
+			partCubierta.Update
+			End If
+		End If
+
+		partCubierta.InWorkObject = bodyPatio1
+		Dim padPatio1 As Pad
+    	Set padPatio1 = shapeFactoryCubierta.AddNewPad(sketchBodyPatio1, height)
+
+		partCubierta.Update
+
+		Dim emptyReferencePatio1 As Reference
+		Set emptyReferencePatio1 = partCubierta.CreateReferenceFromName("")
+
+		Dim draftPatio1 As Draft
+		Set draftPatio1 = shapeFactoryCubierta.AddNewDraft(emptyReferencePatio1, emptyReferencePatio1, catNoneDraftNeutralPropagationMode, emptyReferencePatio1, 0.000000, 0.000000, 1.000000, catStandardDraftMode, 5.000000, catNoneDraftMultiselectionMode)
+
+		Dim draftDomainsPatio1 As DraftDomains
+		Set draftDomainsPatio1 = draftPatio1.DraftDomains
+
+		Dim draftDomainPatio1 As DraftDomain
+		Set draftDomainPatio1 = draftDomainsPatio1.Item(1)
+
+		Dim numberLinesPatio1 As Integer
+		numberLinesPatio1 = sketchBodyPatio1.GeometricElements.Count / 2
+
+		Dim padName1 As String
+		padName1 = padPatio1.Name
+
+		Dim refFace1(25) As Reference
+
+		'Al ser el draft hacia fuera no da error al añadir todas las caras al mismo draft
+		For i = 1 To numberLinesPatio1
+			Set refFace1(i) =  partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("& padName1 &";0:(Brp:("& sketchBodyPatioName1 &";"& i &")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio1)
+			draftDomainPatio1.AddFaceToDraft refFace1(i)
+		Next
+
+		draftDomainPatio1.SetPullingDirection -0.000000, -0.000000, -1.000000
+
+		Dim refPullingElementPatio1 As Reference
+		Set refPullingElementPatio1 = partCubierta.CreateReferenceFromBRepName("FSur:(Face:(Brp:("&padName1&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithInitialFeatureSupport;MFBRepVersion_CXR15)", padPatio1)
+
+		draftDomainPatio1.PullingDirectionElement = refPullingElementPatio1
+
+		Dim refNeutralElementPatio1 As Reference
+		Set refNeutralElementPatio1 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padName1&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio1)
+
+		draftDomainPatio1.NeutralElement = refNeutralElementPatio1
+
+		Dim anglePatio1 As Angle
+		Set anglePatio1 = draftDomainPatio1.DraftAngle
+
+		anglePatio1.Value = alphaPatio1
+
+		partCubierta.InWorkObject = bodyCubierta
+
+		'Se le resta el patio a la cubierta hecha anteriormente
+		Dim removePatio1 As Remove
+		Set removePatio1 = shapeFactoryCubierta.AddNewRemove(bodyPatio1)
+
+		partCubierta.Update
+
+	ElseIf resultPatioInterior = 2 Then
+
+		partCubierta.InWorkObject = bodyCubierta
+		If difCotaPatio12 < 0 Or difCotaPatio2 < 0 Then
+			Dim difCotaPadPatio2 As Integer
+			If difCotaPatio12 < difCotaPatio2 Then
+				difCotaPadPatio2 = difCotaPatio12
+			Else
+				difCotaPadPatio2 = difCotaPatio2
+			End If
+
+			If verticeCota = True And difCotaAux > 0 Then
+			Dim padPatioCotaNegVert2 As Pad
+			Set padPatioCotaNegVert2 = shapeFactoryCubierta.AddNewPad(sketchbodyCotaPos, difCotaPadPatio2 * 1.1)
+			partCubierta.Update
+			Else
+			Dim padPatioCotaNeg2 As Pad
+			Set padPatioCotaNeg2 = shapeFactoryCubierta.AddNewPad(sketchCubierta, difCotaPadPatio2 * 1.1)
+			partCubierta.Update
+			End If
+		End If
+
+		'--------------------------------------------------------------------------------
+		'--------------PATIO 1-----------------------------------------------------------
+		'--------------------------------------------------------------------------------
+
+		partCubierta.InWorkObject = bodyPatio12
+		Dim padPatio12 As Pad
+    	Set padPatio12 = shapeFactoryCubierta.AddNewPad(sketchBodyPatio12, height)
+
+		partCubierta.Update
+
+		Dim emptyReferencePatio12 As Reference
+		Set emptyReferencePatio12 = partCubierta.CreateReferenceFromName("")
+
+		Dim draftPatio12 As Draft
+		Set draftPatio12 = shapeFactoryCubierta.AddNewDraft(emptyReferencePatio12, emptyReferencePatio12, catNoneDraftNeutralPropagationMode, emptyReferencePatio12, 0.000000, 0.000000, 1.000000, catStandardDraftMode, 5.000000, catNoneDraftMultiselectionMode)
+
+		Dim draftDomainsPatio12 As DraftDomains
+		Set draftDomainsPatio12 = draftPatio12.DraftDomains
+
+		Dim draftDomainPatio12 As DraftDomain
+		Set draftDomainPatio12 = draftDomainsPatio12.Item(1)
+
+		Dim numberLinesPatio12 As Integer
+		numberLinesPatio12 = sketchBodyPatio12.GeometricElements.Count / 2
+
+		Dim padName12 As String
+		padName12 = padPatio12.Name
+
+		Dim refFace12(25) As Reference
+
+		'Al ser el draft hacia fuera no da error al añadir todas las caras al mismo draft
+		For i = 1 To numberLinesPatio12
+			Set refFace12(i) =  partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("& padName12 &";0:(Brp:("& sketchBodyPatioName12 &";"& i &")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio12)
+			draftDomainPatio12.AddFaceToDraft refFace12(i)
+		Next
+
+		draftDomainPatio12.SetPullingDirection -0.000000, -0.000000, -1.000000
+
+		Dim refPullingElementPatio12 As Reference
+		Set refPullingElementPatio12 = partCubierta.CreateReferenceFromBRepName("FSur:(Face:(Brp:("&padName12&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithInitialFeatureSupport;MFBRepVersion_CXR15)", padPatio12)
+
+		draftDomainPatio12.PullingDirectionElement = refPullingElementPatio12
+
+		Dim refNeutralElementPatio12 As Reference
+		Set refNeutralElementPatio12 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padName12&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio12)
+
+		draftDomainPatio12.NeutralElement = refNeutralElementPatio12
+
+		Dim anglePatio12 As Angle
+		Set anglePatio12 = draftDomainPatio12.DraftAngle
+
+		anglePatio12.Value = alphaPatio12
+
+		partCubierta.InWorkObject = bodyCubierta
+
+		'Se le resta el patio a la cubierta hecha anteriormente
+		Dim removePatio12 As Remove
+		Set removePatio12 = shapeFactoryCubierta.AddNewRemove(bodyPatio12)
+
+		partCubierta.Update
+
+		'--------------------------------------------------------------------------------
+		'--------------PATIO 2-----------------------------------------------------------
+		'--------------------------------------------------------------------------------
+
+		partCubierta.InWorkObject = bodyPatio2
+		Dim padPatio2 As Pad
+    	Set padPatio2 = shapeFactoryCubierta.AddNewPad(sketchBodyPatio2, height)
+
+		partCubierta.Update
+
+		Dim emptyReferencePatio2 As Reference
+		Set emptyReferencePatio2 = partCubierta.CreateReferenceFromName("")
+
+		Dim draftPatio2 As Draft
+		Set draftPatio2 = shapeFactoryCubierta.AddNewDraft(emptyReferencePatio2, emptyReferencePatio2, catNoneDraftNeutralPropagationMode, emptyReferencePatio2, 0.000000, 0.000000, 1.000000, catStandardDraftMode, 5.000000, catNoneDraftMultiselectionMode)
+
+		Dim draftDomainsPatio2 As DraftDomains
+		Set draftDomainsPatio2 = draftPatio2.DraftDomains
+
+		Dim draftDomainPatio2 As DraftDomain
+		Set draftDomainPatio2 = draftDomainsPatio2.Item(1)
+
+		Dim numberLinesPatio2 As Integer
+		numberLinesPatio2 = sketchBodyPatio2.GeometricElements.Count / 2
+
+		Dim padName2 As String
+		padName2 = padPatio2.Name
+
+		Dim refFace2(25) As Reference
+
+		'Al ser el draft hacia fuera no da error al añadir todas las caras al mismo draft
+		For i = 1 To numberLinesPatio2
+			Set refFace2(i) =  partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("& padName2 &";0:(Brp:("& sketchBodyPatioName2 &";"& i &")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio2)
+			draftDomainPatio2.AddFaceToDraft refFace2(i)
+		Next
+
+		draftDomainPatio2.SetPullingDirection -0.000000, -0.000000, -1.000000
+
+		Dim refPullingElementPatio2 As Reference
+		Set refPullingElementPatio2 = partCubierta.CreateReferenceFromBRepName("FSur:(Face:(Brp:("&padName2&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithInitialFeatureSupport;MFBRepVersion_CXR15)", padPatio2)
+
+		draftDomainPatio2.PullingDirectionElement = refPullingElementPatio2
+
+		Dim refNeutralElementPatio2 As Reference
+		Set refNeutralElementPatio2 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padName2&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio2)
+
+		draftDomainPatio2.NeutralElement = refNeutralElementPatio2
+
+		Dim anglePatio2 As Angle
+		Set anglePatio2 = draftDomainPatio2.DraftAngle
+
+		anglePatio2.Value = alphaPatio2
+
+		partCubierta.InWorkObject = bodyCubierta
+
+		'Se le resta el patio a la cubierta hecha anteriormente
+		Dim removePatio2 As Remove
+		Set removePatio2 = shapeFactoryCubierta.AddNewRemove(bodyPatio2)
+
+		partCubierta.Update
+
+	ElseIf resultPatioInterior = 3 Then
+
+		partCubierta.InWorkObject = bodyCubierta
+		If difCotaPatio13 < 0 Or difCotaPatio3 < 0 Or difCotaPatio3 < 0 Then
+			Dim difCotaPadPatio3 As Integer
+			If difCotaPatio13 <= difCotaPatio23 And difCotaPatio13 <= difCotaPatio3 Then
+				difCotaPadPatio3 = difCotaPatio13
+			ElseIf difCotaPatio23 <= difCotaPatio13 And difCOtaPatio23 <= difCotaPatio3 Then
+				difCotaPadPatio3 = difCOtaPatio23
+			Else
+				difCotaPadPatio3 = difCotaPatio3
+			End If
+
+			If verticeCota = True And difCotaAux > 0 Then
+			Dim padPatioCotaNegVert3 As Pad
+			Set padPatioCotaNegVert3 = shapeFactoryCubierta.AddNewPad(sketchbodyCotaPos, difCotaPadPatio3 * 1.1)
+			partCubierta.Update
+			Else
+			Dim padPatioCotaNeg3 As Pad
+			Set padPatioCotaNeg3 = shapeFactoryCubierta.AddNewPad(sketchCubierta, difCotaPadPatio3 * 1.1)
+			partCubierta.Update
+			End If
+		End If
+		'--------------------------------------------------------------------------------
+		'--------------PATIO 1-----------------------------------------------------------
+		'--------------------------------------------------------------------------------
+
+		partCubierta.InWorkObject = bodyPatio13
+		Dim padPatio13 As Pad
+    	Set padPatio13 = shapeFactoryCubierta.AddNewPad(sketchBodyPatio13, height)
+
+		partCubierta.Update
+
+		Dim emptyReferencePatio13 As Reference
+		Set emptyReferencePatio13 = partCubierta.CreateReferenceFromName("")
+
+		Dim draftPatio13 As Draft
+		Set draftPatio13 = shapeFactoryCubierta.AddNewDraft(emptyReferencePatio13, emptyReferencePatio13, catNoneDraftNeutralPropagationMode, emptyReferencePatio13, 0.000000, 0.000000, 1.000000, catStandardDraftMode, 5.000000, catNoneDraftMultiselectionMode)
+
+		Dim draftDomainsPatio13 As DraftDomains
+		Set draftDomainsPatio13 = draftPatio13.DraftDomains
+
+		Dim draftDomainPatio13 As DraftDomain
+		Set draftDomainPatio13 = draftDomainsPatio13.Item(1)
+
+		Dim numberLinesPatio13 As Integer
+		numberLinesPatio13 = sketchBodyPatio13.GeometricElements.Count / 2
+
+		Dim padName13 As String
+		padName13 = padPatio13.Name
+
+		Dim refFace13(25) As Reference
+
+		'Al ser el draft hacia fuera no da error al añadir todas las caras al mismo draft
+		For i = 1 To numberLinesPatio13
+			Set refFace13(i) =  partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("& padName13 &";0:(Brp:("& sketchBodyPatioName13 &";"& i &")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio13)
+			draftDomainPatio13.AddFaceToDraft refFace13(i)
+		Next
+
+		draftDomainPatio13.SetPullingDirection -0.000000, -0.000000, -1.000000
+
+		Dim refPullingElementPatio13 As Reference
+		Set refPullingElementPatio13 = partCubierta.CreateReferenceFromBRepName("FSur:(Face:(Brp:("&padName13&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithInitialFeatureSupport;MFBRepVersion_CXR15)", padPatio13)
+
+		draftDomainPatio13.PullingDirectionElement = refPullingElementPatio13
+
+		Dim refNeutralElementPatio13 As Reference
+		Set refNeutralElementPatio13 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padName13&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio13)
+
+		draftDomainPatio13.NeutralElement = refNeutralElementPatio13
+
+		Dim anglePatio13 As Angle
+		Set anglePatio13 = draftDomainPatio13.DraftAngle
+
+		anglePatio13.Value = alphaPatio13
+
+		partCubierta.InWorkObject = bodyCubierta
+
+		'Se le resta el patio a la cubierta hecha anteriormente
+		Dim removePatio13 As Remove
+		Set removePatio13 = shapeFactoryCubierta.AddNewRemove(bodyPatio13)
+
+		partCubierta.Update
+
+		'--------------------------------------------------------------------------------
+		'--------------PATIO 2-----------------------------------------------------------
+		'--------------------------------------------------------------------------------
+
+		partCubierta.InWorkObject = bodyPatio23
+		Dim padPatio23 As Pad
+    	Set padPatio23 = shapeFactoryCubierta.AddNewPad(sketchBodyPatio23, height)
+
+		partCubierta.Update
+
+		Dim emptyReferencePatio23 As Reference
+		Set emptyReferencePatio23 = partCubierta.CreateReferenceFromName("")
+
+		Dim draftPatio23 As Draft
+		Set draftPatio23 = shapeFactoryCubierta.AddNewDraft(emptyReferencePatio23, emptyReferencePatio23, catNoneDraftNeutralPropagationMode, emptyReferencePatio23, 0.000000, 0.000000, 1.000000, catStandardDraftMode, 5.000000, catNoneDraftMultiselectionMode)
+
+		Dim draftDomainsPatio23 As DraftDomains
+		Set draftDomainsPatio23 = draftPatio23.DraftDomains
+
+		Dim draftDomainPatio23 As DraftDomain
+		Set draftDomainPatio23 = draftDomainsPatio23.Item(1)
+
+		Dim numberLinesPatio23 As Integer
+		numberLinesPatio23 = sketchBodyPatio23.GeometricElements.Count / 2
+
+		Dim padName23 As String
+		padName23 = padPatio23.Name
+
+		Dim refFace23(25) As Reference
+
+		'Al ser el draft hacia fuera no da error al añadir todas las caras al mismo draft
+		For i = 1 To numberLinesPatio23
+			Set refFace23(i) =  partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("& padName23 &";0:(Brp:("& sketchBodyPatioName23 &";"& i &")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio23)
+			draftDomainPatio23.AddFaceToDraft refFace23(i)
+		Next
+
+		draftDomainPatio23.SetPullingDirection -0.000000, -0.000000, -1.000000
+
+		Dim refPullingElementPatio23 As Reference
+		Set refPullingElementPatio23 = partCubierta.CreateReferenceFromBRepName("FSur:(Face:(Brp:("&padName23&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithInitialFeatureSupport;MFBRepVersion_CXR15)", padPatio23)
+
+		draftDomainPatio23.PullingDirectionElement = refPullingElementPatio23
+
+		Dim refNeutralElementPatio23 As Reference
+		Set refNeutralElementPatio23 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padName23&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio23)
+
+		draftDomainPatio23.NeutralElement = refNeutralElementPatio23
+
+		Dim anglePatio23 As Angle
+		Set anglePatio23 = draftDomainPatio23.DraftAngle
+
+		anglePatio23.Value = alphaPatio23
+
+		partCubierta.InWorkObject = bodyCubierta
+
+		'Se le resta el patio a la cubierta hecha anteriormente
+		Dim removePatio23 As Remove
+		Set removePatio23 = shapeFactoryCubierta.AddNewRemove(bodyPatio23)
+
+		partCubierta.Update
+
+		'--------------------------------------------------------------------------------
+		'--------------PATIO 3-----------------------------------------------------------
+		'--------------------------------------------------------------------------------
+
+		partCubierta.InWorkObject = bodyPatio3
+		Dim padPatio3 As Pad
+    	Set padPatio3 = shapeFactoryCubierta.AddNewPad(sketchBodyPatio3, height)
+
+		partCubierta.Update
+
+		Dim emptyReferencePatio3 As Reference
+		Set emptyReferencePatio3 = partCubierta.CreateReferenceFromName("")
+
+		Dim draftPatio3 As Draft
+		Set draftPatio3 = shapeFactoryCubierta.AddNewDraft(emptyReferencePatio3, emptyReferencePatio3, catNoneDraftNeutralPropagationMode, emptyReferencePatio3, 0.000000, 0.000000, 1.000000, catStandardDraftMode, 5.000000, catNoneDraftMultiselectionMode)
+
+		Dim draftDomainsPatio3 As DraftDomains
+		Set draftDomainsPatio3 = draftPatio3.DraftDomains
+
+		Dim draftDomainPatio3 As DraftDomain
+		Set draftDomainPatio3 = draftDomainsPatio3.Item(1)
+
+		Dim numberLinesPatio3 As Integer
+		numberLinesPatio3 = sketchBodyPatio3.GeometricElements.Count / 2
+
+		Dim padName3 As String
+		padName3 = padPatio3.Name
+
+		Dim refFace3(25) As Reference
+
+		'Al ser el draft hacia fuera no da error al añadir todas las caras al mismo draft
+		For i = 1 To numberLinesPatio3
+			Set refFace3(i) =  partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("& padName3 &";0:(Brp:("& sketchBodyPatioName3 &";"& i &")));None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio3)
+			draftDomainPatio3.AddFaceToDraft refFace3(i)
+		Next
+
+		draftDomainPatio3.SetPullingDirection -0.000000, -0.000000, -1.000000
+
+		Dim refPullingElementPatio3 As Reference
+		Set refPullingElementPatio3 = partCubierta.CreateReferenceFromBRepName("FSur:(Face:(Brp:("&padName3&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithInitialFeatureSupport;MFBRepVersion_CXR15)", padPatio3)
+
+		draftDomainPatio3.PullingDirectionElement = refPullingElementPatio3
+
+		Dim refNeutralElementPatio3 As Reference
+		Set refNeutralElementPatio3 = partCubierta.CreateReferenceFromBRepName("RSur:(Face:(Brp:("&padName3&";1);None:();Cf11:());WithTemporaryBody;WithoutBuildError;WithSelectingFeatureSupport;MFBRepVersion_CXR15)", padPatio3)
+
+		draftDomainPatio3.NeutralElement = refNeutralElementPatio3
+
+		Dim anglePatio3 As Angle
+		Set anglePatio3 = draftDomainPatio3.DraftAngle
+
+		anglePatio3.Value = alphaPatio3
+
+		partCubierta.InWorkObject = bodyCubierta
+
+		'Se le resta el patio a la cubierta hecha anteriormente
+		Dim removePatio3 As Remove
+		Set removePatio3 = shapeFactoryCubierta.AddNewRemove(bodyPatio3)
+
+		partCubierta.Update
+
+	End If
+
+	'En esta sub se obtiene el plano
+	SacarPlano partDocumentCubierta, partCubierta
+
+End Sub
+
+'-----------------Sub SacarPlano---------------------
+Sub SacarPlano(partDocumentCubierta, partCubierta)
+
+	'Añadimos un nuevo plano con formato ISO A3 horizontal
+	Dim documentsPlano As Documents
+	Set documentsPlano = CATIA.Documents
+
+	Dim drawingDocumentPlano As Document
+	Set drawingDocumentPlano = documentsPlano.Add("Drawing")
+
+	drawingDocumentPlano.Standard = catISO
+
+	Dim drawingSheetsPlano As DrawingSheets
+	Set drawingSheetsPlano = drawingDocumentPlano.Sheets
+
+	Dim drawingSheetPlano As DrawingSheet
+	Set drawingSheetPlano = drawingSheetsPlano.Item("Sheet.1")
+
+	drawingSheetPlano.PaperSize = catPaperA3
+
+	drawingSheetPlano.Scale = 1.000000
+
+	drawingSheetPlano.Orientation = catPaperLandscape
+
+	'Se añade una vista de planta
+	Dim drawingViewsPlano As DrawingViews
+	Set drawingViewsPlano = drawingSheetPlano.Views
+
+	Dim drawingViewPlano As DrawingView
+	Set drawingViewPlano = drawingViewsPlano.Add("AutomaticNaming")
+
+	Dim drawingViewGenerativeLinks1 As DrawingViewGenerativeLinks
+	Set drawingViewGenerativeLinks1 = drawingViewPlano.GenerativeLinks
+
+	Dim drawingViewGenerativeBehavior1 As DrawingViewGenerativeBehavior
+	Set drawingViewGenerativeBehavior1 = drawingViewPlano.GenerativeBehavior
+
+	drawingViewGenerativeBehavior1.Document = partCubierta
+
+	drawingViewGenerativeBehavior1.DefineFrontView 1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000
+
+	'Indicamos que la vista se ponga en el centro de la hoja
+	drawingViewPlano.x = 210.000000
+	drawingViewPlano.y = 148.500000
+
+	drawingViewPlano.Scale = 1.000000
+
+	Set drawingViewGenerativeBehavior1 = drawingViewPlano.GenerativeBehavior
+
+	drawingViewGenerativeBehavior1.Update
+
+	drawingViewPlano.Activate
+
+	Dim myScale As Double
+	myScale = drawingViewPlano.Scale2
+
+	'Le ponemos un poco menos de lo que tiene en realidad un A3 para que no quede muy pegado a los bordes
+	Dim sheetWidth As Double
+	sheetWidth = 360
+	Dim sheetHeight As Double
+	sheetHeight = 250
+
+	'Aqui se obtiene el punto inferior izquierdo y superior derecho de la vista
+	Dim viewPoints(3) As Double
+	drawingViewPlano.Size viewPoints
+
+	Dim viewHeight As Double
+	viewHeight = viewPoints(3)-viewPoints(2)
+	Dim viewWidth As Double
+	viewWidth = viewPoints(1)-viewPoints(0)
+
+	'Se obtiene la escala para que el plano quepa de ancho y alto, y se elige la mas pequeña pues sera la que defina
+	Dim ratioHeight As Double
+	Dim ratioWidth As Double
+	ratioHeight = (sheetHeight / 2) / (viewHeight / 2)
+	ratioWidth = (sheetWidth / 2) / (viewWidth / 2)
+
+	If ratioHeight > ratioWidth Then
+		myScale = ratioWidth
+	Else
+		myScale = ratioHeight
+	End If
+
+	Dim cotasNorm(7) As Double
+	cotasNorm(1) = 1/100
+	cotasNorm(2) = 1/150
+	cotasNorm(3) = 1/200
+	cotasNorm(4) = 1/250
+	cotasNorm(5) = 1/300
+	cotasNorm(6) = 1/400
+	cotasNorm(7) = 1/500
+
+	For a = 1 To 7
+		If cotasNorm(a) < myScale Then
+			myScale = cotasNorm(a)
+			Exit For
+		End If
+	Next
+
+	drawingViewPlano.Scale = myScale
+
+	drawingViewGenerativeBehavior1.Update
+
+	Dim specsAndGeomWindow1 As Window
+	Set specsAndGeomWindow1 = CATIA.ActiveWindow
+
+	Dim specsViewer1 As Viewer
+	Set specsViewer1 = specsAndGeomWindow1.ActiveViewer
+
+	specsViewer1.Reframe
+
+End Sub
